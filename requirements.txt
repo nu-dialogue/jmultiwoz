@@ -1,0 +1,15 @@
+torch
+# transformers
+git+https://github.com/huggingface/transformers
+accelerate
+datasets
+evaluate
+scikit-learn
+urllib3==1.26.6 # https://stackoverflow.com/a/76187415
+nltk
+sentencepiece != 0.1.92
+protobuf
+rouge-score
+tensorboard
+tensorboardX
+sacrebleu[ja]
