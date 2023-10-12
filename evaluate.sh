@@ -1,4 +1,4 @@
 python evaluate.py \
-    --test_file "processed_data/test.json" \
-    --inference_output_dpath "output/t5-large-bs32-ep5-len512" \
+    --dataset_dpath "dataset/JMultiWOZ_1.0" \
+    --inference_output_dpath "output_v1/openai-zs-len256" \
     --task_name "e2e"

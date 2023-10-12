@@ -10,12 +10,15 @@ from sacrebleu import sentence_bleu
 from transformers import (
     HfArgumentParser
 )
-from datasets import load_dataset
+from data_utils import (
+    state_dict2str
+)
+from jmultiwoz import JMultiWOZDataset
 
 @dataclass
 class EvaluationArguments:
-    test_file: str = field(
-        metadata={"help": "Path to test file."}
+    dataset_dpath: str = field(
+        metadata={"help": "Path to dataset directory."}
     )
     inference_output_dpath: str = field(
         metadata={"help": "Path to inference output directory."}
@@ -25,17 +28,32 @@ class EvaluationArguments:
                            "'rg' (Response Generation from Dialogue State).")}
     )
 
+def dialogues_to_df(dialogues: dict) -> pd.DataFrame:
+    turn_dicts = []
+    for dialogue_name, dialogue in dialogues.items():
+        for turn in dialogue["turns"]:
+            if turn["speaker"] == "USER":
+                continue
+            turn_dicts.append({
+                "dialogue_name": dialogue_name,
+                "turn_id": turn["turn_id"],
+                "belief_state": turn.get("dialogue_state", {}).get("belief_state"),
+                "book_state": turn.get("dialogue_state", {}).get("book_state"),
+                "response": turn["utterance"],
+            })
+    return pd.DataFrame(turn_dicts).set_index(["dialogue_name", "turn_id"])
+
 def compute_joint_goal_accuracy(row: pd.Series):
-    state_str_ref = row["state_str"]
-    state_str_hyp = row["hyp/state_str"]
+    state_str_ref = state_dict2str(belief_state=row["belief_state"], book_state=row["book_state"])
+    state_str_hyp = state_dict2str(belief_state=row["hyp/belief_state"], book_state=row["hyp/book_state"])
 
     state_set_ref = set(state_str_ref.split(", "))
     state_set_hyp = set(state_str_hyp.split(", "))
     return int(state_set_ref == state_set_hyp)
 
 def compute_slot_f1(row: pd.Series):
-    state_str_ref = row["state_str"]
-    state_str_hyp = row["hyp/state_str"]
+    state_str_ref = state_dict2str(belief_state=row["belief_state"], book_state=row["book_state"])
+    state_str_hyp = state_dict2str(belief_state=row["hyp/belief_state"], book_state=row["hyp/book_state"])
 
     state_set_ref = set(state_str_ref.split(", "))
     state_set_hyp = set(state_str_hyp.split(", "))
@@ -60,15 +78,13 @@ def main():
     parser = HfArgumentParser((EvaluationArguments))
     eval_args = parser.parse_args_into_dataclasses()[0]
 
-    df_ref = load_dataset(
-        "json",
-        data_files={"test": eval_args.test_file}
-    )["test"].to_pandas().set_index(["dialogue_name", "user_turn_id", "system_turn_id"])
+    dialogues_ref = JMultiWOZDataset(dataset_dpath=eval_args.dataset_dpath).get_dialogues(split="test")
+    df_ref = dialogues_to_df(dialogues_ref)
 
-    df_hyp = load_dataset(
-        "json",
-        data_files={"test": os.path.join(eval_args.inference_output_dpath, f"{eval_args.task_name}.inference.json")}
-    )["test"].to_pandas().set_index(["dialogue_name", "user_turn_id", "system_turn_id"])
+    dialogues_hyp = json.load(
+        open(os.path.join(eval_args.inference_output_dpath, f"{eval_args.task_name}.inference.json"))
+    )
+    df_hyp = dialogues_to_df(dialogues_hyp)
 
     assert df_ref.index.equals(df_hyp.index), "Reference and hypothesis dataframes have different indices."
 

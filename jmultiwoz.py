@@ -2,6 +2,38 @@ import os
 import json
 import pandas as pd
 import random
+from typing import List, Tuple
+
+class JMultiWOZDataset:
+    def __init__(self, dataset_dpath) -> None:
+        self.dataset_dpath = dataset_dpath
+        self.ontology = json.load(open(os.path.join(dataset_dpath, "ontology.json")))
+        self.split_list = json.load(open(os.path.join(dataset_dpath, "split_list.json")))
+        dialogues = json.load(open(os.path.join(dataset_dpath, "dialogues.json")))
+
+        self.dialogues = {}
+        for split, dialogue_names in self.split_list.items():
+            self.dialogues[split] = {}
+            for dialogue_name in dialogue_names:
+                self.dialogues[split][dialogue_name] = dialogues[dialogue_name]
+    def get_dialogues(self, split: str) -> dict:
+        return self.dialogues[split]
+
+    def list_dialogues(self, split: str) -> List[str]:
+        return self.split_list[split]
+
+    def get_dialogue_goal(self, split: str, dialogue_name: str) -> dict:
+        return self.dialogues[split][dialogue_name]["goal"]
+
+    def iter_dialogue_turns(self, split: str, dialogue_name: str) -> Tuple[List[Tuple[str, str]], dict]:
+        dialogue = self.dialogues[split][dialogue_name]
+        context = []
+        for turn in dialogue["turns"]:
+            if turn["speaker"] == "USER":
+                context.append(("USER", turn["utterance"]))
+            else:
+                yield context, turn
+                context.append(("SYSTEM", turn["utterance"]))
 
 class JMultiWOZDatabase:
     def __init__(self, db_dpath):
@@ -124,4 +156,3 @@ class JMultiWOZDatabase:
             else: # Fail
                 book_result[domain] = {"success": False, "ref": None}
         return book_result
-    

@@ -31,8 +31,8 @@ mpirun \
         --output_dir "${OUTPUT_DIR}/checkpoints" \
         --logging_dir "${OUTPUT_DIR}/log" \
         --report_to "tensorboard" \
-        --train_file "../processed_data/train.json" \
-        --validation_file "../processed_data/dev.json" \
+        --train_file "processed_data/train.json" \
+        --validation_file "processed_data/dev.json" \
         --max_target_length 256 \
         --per_device_train_batch_size 2 \
         --per_device_eval_batch_size 2 \

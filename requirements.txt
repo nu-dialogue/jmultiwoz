@@ -13,3 +13,4 @@ rouge-score
 tensorboard
 tensorboardX
 sacrebleu[ja]
+openai

@@ -8,28 +8,18 @@ import numpy as np
 import json
 
 import multiprocessing as standard_mp
-import torch
 import torch.multiprocessing as torch_mp
 
 from transformers import (
     HfArgumentParser
 )
-from datasets import load_dataset
-
-from data_utils import (
-    state_dict2str,
-    state_str2dict,
-    db_result_dict2str,
-    book_result_dict2str,
-    book_result_str2dict
-)
-from db_manager import JMultiWOZDatabase
+from jmultiwoz import JMultiWOZDataset, JMultiWOZDatabase
 
 @dataclass
 class TODModelArguments:
 
     tod_model_type: str = field(
-        metadata={"help": "Type of TOD model to use. Select from: 't5', 'openai'"}
+        metadata={"help": "Type of TOD model to use. Select from: 't5', 'openai-zs', 'openai-fs'"}
     )
     model_name_or_path: Optional[str] = field(
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
@@ -52,7 +42,7 @@ class TODModelArguments:
         default="<店員>",
         metadata={"help": "A prefix to add before every system utterance text."},
     )
-    belief_state_prefix: Optional[str] = field(
+    state_prefix: Optional[str] = field(
         default="<信念状態>",
         metadata={"help": "A prefix to add before every belief state text."},
     )
@@ -63,6 +53,10 @@ class TODModelArguments:
     book_result_prefix: Optional[str] = field(
         default="<予約結果>",
         metadata={"help": "A prefix to add before every book result text."},
+    )
+    max_candidate_entities: int = field(
+        default=3,
+        metadata={"help": "The maximum number of candidate entities to show in DB result."}
     )
 
     max_input_length: Optional[int] = field(
@@ -75,7 +69,7 @@ class TODModelArguments:
         },
     )
     max_output_length: Optional[int] = field(
-        default=114,
+        default=256,
         metadata={
             "help": (
                 "The maximum total sequence length for target text after tokenization. Sequences longer "
@@ -93,16 +87,9 @@ class InferenceArguments:
         metadata={"help": ("The name of the task to evaluate. Select from: 'e2e' (End-to-End Generation) and "
                            "'rg' (Response Generation from Dialogue State).")}
     )
-    test_file: str = field(
-        metadata={"help": "Path to the test dataset file."}
-    )
     dataset_dpath: str = field(
         default="dataset/JMultiWOZ_1.0",
         metadata={"help": "Path to the dataset directory."}
-    )
-    max_candidate_entities: int = field(
-        default=3,
-        metadata={"help": "The maximum number of candidate entities to show in DB result."}
     )
     world_size: int = field(
         default=1,
@@ -121,106 +108,136 @@ def load_tod_model(tod_model_args, device="cuda"):
             rg_task_prefix=tod_model_args.rg_task_prefix,
             user_utterance_prefix=tod_model_args.user_utterance_prefix,
             system_utterance_prefix=tod_model_args.system_utterance_prefix,
-            belief_state_prefix=tod_model_args.belief_state_prefix,
+            state_prefix=tod_model_args.state_prefix,
             db_result_prefix=tod_model_args.db_result_prefix,
+            max_candidate_entities=tod_model_args.max_candidate_entities,
             book_result_prefix=tod_model_args.book_result_prefix,
         )
-    elif tod_model_args.tod_model_type == "openai":
+    elif tod_model_args.tod_model_type == "openai-zs":
+        from llm.openai_tod_model import OpenAIZeroShotTODModel
+        tod_model = OpenAIZeroShotTODModel(
+            openai_model_name=tod_model_args.model_name_or_path,
+            max_output_length=tod_model_args.max_output_length,
+            user_utterance_prefix=tod_model_args.user_utterance_prefix,
+            system_utterance_prefix=tod_model_args.system_utterance_prefix,
+            state_prefix=tod_model_args.state_prefix,
+            db_result_prefix=tod_model_args.db_result_prefix,
+            max_candidate_entities=tod_model_args.max_candidate_entities,
+            book_result_prefix=tod_model_args.book_result_prefix,
+            response_prefix=tod_model_args.rg_task_prefix,
+        )
+    elif tod_model_args.tod_model_type == "openai-fs":
         raise NotImplementedError
     else:
         raise ValueError(f"Invalid tod_model_type: {tod_model_args.tod_model_type}")
     return tod_model
 
-def e2e_inference(rank, tod_model_args, infer_args, example_indices_by_process, test_examples, results_by_rank):
-
-    true_dialogues = json.load(open(os.path.join(infer_args.dataset_dpath, "dialogues.json")))
+def e2e_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, dataset, results_by_rank):
     database = JMultiWOZDatabase(db_dpath=os.path.join(infer_args.dataset_dpath, "database"))
 
     tod_model = load_tod_model(tod_model_args, device=rank)
 
-    example_indices = example_indices_by_process[rank]
-    results = []
-    print(f"Rank {rank} is processing {len(example_indices)} examples...")
-    for example_index in tqdm(example_indices):
-        example = test_examples[example_index]
+    dialogue_names = dialogue_names_by_process[rank]
+    results = {}
+    print(f"Rank {rank} is processing {len(dialogue_names)} dialogues...")
+    for dialogue_name in tqdm(dialogue_names):
+        goal = dataset.get_dialogue_goal(split="test", dialogue_name=dialogue_name)
+        results[dialogue_name] = {
+            "dialogue_name": dialogue_name,
+            "turns": [],
+        }
+        tod_model.init_session()
+        for context, true_turn in dataset.iter_dialogue_turns(split="test", dialogue_name=dialogue_name):
+            assert true_turn["speaker"] == "SYSTEM", "Must be system turn."
 
-        # 0. Get Ground Truth Dialogue
-        goal = true_dialogues[example["dialogue_name"]]["goal"]
-        true_system_turn = true_dialogues[example["dialogue_name"]]["turns"][example["system_turn_id"]]
+            # breakpoint()
 
-        # 1. Dialogue State Tracking
-        state_str = tod_model.predict_state(
-            context=example["context"],
-        )
+            # 1. Dialogue State Tracking
+            belief_state, book_state = tod_model.predict_state(
+                context=context,
+            )
 
-        # 2. Get DB result
-        belief_state, book_state = state_str2dict(
-            state_str=state_str
-        )
-        db_result = database.get_db_result(
-            belief_state=belief_state,
-            goal=goal,
-            oracle_db_result=true_system_turn["dialogue_state"]["db_result"],
-        )
-        db_result_str = db_result_dict2str(
-            db_result=db_result,
-            max_candidate_entities=infer_args.max_candidate_entities
-        )
+            # 2. Get DB result
+            db_result = database.get_db_result(
+                belief_state=belief_state,
+                goal=goal,
+                oracle_db_result=true_turn["dialogue_state"]["db_result"],
+            )
 
-        # 3. Get Book result
-        book_result = database.get_book_result(
-            book_state=book_state,
-            goal=goal,
-            oracle_book_result=true_system_turn["dialogue_state"]["book_result"],
-        )
-        book_result_str = book_result_dict2str(
-            book_result=book_result
-        )
+            # 3. Get Book result
+            book_result = database.get_book_result(
+                book_state=book_state,
+                goal=goal,
+                oracle_book_result=true_turn["dialogue_state"]["book_result"],
+            )
 
-        # 4. Generate response
-        response = tod_model.generate_response(
-            context=example["context"],
-            belief_state=state_str,
-            db_result=db_result_str,
-            book_result=book_result_str,
-        )
+            # 4. Generate response
+            response = tod_model.generate_response(
+                context=context,
+                belief_state=belief_state,
+                book_state=book_state,
+                db_result=db_result,
+                book_result=book_result,
+            )
 
-        results.append({
-            "dialogue_name": example["dialogue_name"],
-            "user_turn_id": example["user_turn_id"],
-            "system_turn_id": example["system_turn_id"],
-            "state_str": state_str,
-            "db_result_str": db_result_str,
-            "book_result_str": book_result_str,
-            "response": response,
-        })
+            results[dialogue_name]["turns"].append({
+                "turn_id": true_turn["turn_id"],
+                "speaker": "SYSTEM",
+                "dialogue_state": {
+                    "belief_state": belief_state,
+                    "book_state": book_state,
+                    "db_result": db_result,
+                    "book_result": book_result,
+                },
+                "utterance": response,
+            })
+            # Save intermediate results temporarily
+            jsonline = json.dumps({
+                "dialogue_name": dialogue_name,
+                **results[dialogue_name]["turns"][-1],
+            }, ensure_ascii=False)
+            with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.{rank}.jsonl"), "a") as f:
+                f.write(jsonline + "\n")
 
     results_by_rank[rank] = results
     # return results
 
-def rg_inference(rank, tod_model_args, infer_args, example_indices_by_process, test_examples, results_by_rank):
+def rg_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, dataset, results_by_rank):
     tod_model = load_tod_model(tod_model_args, device=rank)
 
-    example_indices = example_indices_by_process[rank]
-    results = []
-    print(f"Rank {rank} is processing {len(example_indices)} examples...")
-    for example_index in tqdm(example_indices):
-        example = test_examples[example_index]
+    dialogue_names = dialogue_names_by_process[rank]
+    results = {}
+    print(f"Rank {rank} is processing {len(dialogue_names)} dialogues...")
+    for dialogue_name in tqdm(dialogue_names):
+        results[dialogue_name] = {
+            "dialogue_name": dialogue_name,
+            "turns": [],
+        }
+        tod_model.init_session()
+        for context, true_turn in dataset.iter_dialogue_turns(split="test", dialogue_name=dialogue_name):
+            assert true_turn["speaker"] == "SYSTEM", "Must be system turn."
 
-        # Generate response from oracle state
-        response = tod_model.generate_response(
-            context=example["context"],
-            belief_state=example["state_str"],
-            db_result=example["db_result_str"],
-            book_result=example["book_result_str"],
-        )
+            # Generate response from oracle state
+            response = tod_model.generate_response(
+                context=context,
+                belief_state=true_turn["dialogue_state"]["belief_state"],
+                book_state=true_turn["dialogue_state"]["book_state"],
+                db_result=true_turn["dialogue_state"]["db_result"],
+                book_result=true_turn["dialogue_state"]["book_result"],
+            )
 
-        results.append({
-            "dialogue_name": example["dialogue_name"],
-            "user_turn_id": example["user_turn_id"],
-            "system_turn_id": example["system_turn_id"],
-            "response": response,
-        })
+            results[dialogue_name]["turns"].append({
+                "turn_id": true_turn["turn_id"],
+                "speaker": "SYSTEM",
+                "utterance": response,
+            })
+            # Save intermediate results temporarily
+            jsonline = json.dumps({
+                "dialogue_name": dialogue_name,
+                **results[dialogue_name]["turns"][-1],
+            }, ensure_ascii=False)
+            with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.{rank}.jsonl"), "a") as f:
+                f.write(jsonline + "\n")
 
     results_by_rank[rank] = results
     # return results
@@ -229,16 +246,22 @@ def main():
     parser = HfArgumentParser((TODModelArguments, InferenceArguments))
     tod_model_args, infer_args = parser.parse_args_into_dataclasses()
 
-    extension = infer_args.test_file.split(".")[-1]
+    os.makedirs(infer_args.output_dir, exist_ok=True)
+    json.dump(
+        {"tod_model_args": tod_model_args.__dict__, "infer_args": infer_args.__dict__},
+        open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.args.json"), "w"),
+        ensure_ascii=False,
+        indent=4,
+    )
 
-    test_examples = load_dataset(
-        extension,
-        data_files={"test": infer_args.test_file},
-    )["test"]
+    dataset = JMultiWOZDataset(
+        dataset_dpath=infer_args.dataset_dpath
+    )
+    dialogue_names = dataset.list_dialogues(split="test")
 
-    example_indices_by_process = {
-        rank : indices.tolist() for rank, indices in enumerate(
-            np.array_split(np.arange(test_examples.num_rows), infer_args.world_size)
+    dialogue_names_by_process = {
+        rank : names.tolist() for rank, names in enumerate(
+            np.array_split(dialogue_names, infer_args.world_size)
         )
     }
 
@@ -258,8 +281,8 @@ def main():
             args=(
                 tod_model_args,
                 infer_args,
-                example_indices_by_process,
-                test_examples,
+                dialogue_names_by_process,
+                dataset,
                 results_by_rank
             ),
             nprocs=infer_args.world_size,
@@ -267,31 +290,27 @@ def main():
         )
         
     else:
-        print("Computing utility matrix in a single process...")
+        print("Computing on single process...")
         results_by_rank = {}
         infer_fn(
             rank=0,
             tod_model_args=tod_model_args,
             infer_args=infer_args,
-            example_indices_by_process=example_indices_by_process,
-            test_examples=test_examples,
+            dialogue_names_by_process=dialogue_names_by_process,
+            dataset=dataset,
             results_by_rank=results_by_rank,
         )
         
-    jsonlines = []
+    results = {}
     for rank in range(infer_args.world_size):
-        for result in results_by_rank[rank]:
-            jsonlines.append(json.dumps(result, ensure_ascii=False) + "\n")
+        results.update(results_by_rank[rank])
     
-    os.makedirs(infer_args.output_dir, exist_ok=True)
     json.dump(
-        {"tod_model_args": tod_model_args.__dict__, "infer_args": infer_args.__dict__},
-        open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.args.json"), "w"),
+        results,
+        open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.json"), "w"),
         ensure_ascii=False,
         indent=4,
     )
-    with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.json"), "w") as f:
-        f.writelines(jsonlines)
     
 if __name__ == "__main__":
     main()

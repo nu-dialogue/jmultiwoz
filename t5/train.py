@@ -26,11 +26,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import datasets
-import evaluate
-import nltk  # Here to have a nice missing dependency error message early on
 import numpy as np
 from datasets import load_dataset
-from filelock import FileLock
 
 import torch
 import transformers
@@ -40,8 +37,6 @@ from transformers import (
     AutoTokenizer,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
-    MBart50Tokenizer,
-    MBart50TokenizerFast,
     MBartTokenizer,
     MBartTokenizerFast,
     Seq2SeqTrainer,
@@ -49,7 +44,7 @@ from transformers import (
     set_seed,
 )
 from transformers.trainer_utils import get_last_checkpoint
-from transformers.utils import check_min_version, is_offline_mode, send_example_telemetry
+from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
 
@@ -59,35 +54,6 @@ check_min_version("4.34.0.dev0")
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summarization/requirements.txt")
 
 logger = logging.getLogger(__name__)
-
-try:
-    nltk.data.find("tokenizers/punkt")
-except (LookupError, OSError):
-    if is_offline_mode():
-        raise LookupError(
-            "Offline mode: run this script without TRANSFORMERS_OFFLINE first to download nltk data files"
-        )
-    with FileLock(".lock") as lock:
-        nltk.download("punkt", quiet=True)
-
-def set_mpi_env():
-    world_size = int(os.environ.get("OMPI_COMM_WORLD_SIZE", 1))
-    world_rank = int(os.environ.get("OMPI_COMM_WORLD_RANK", 0))
-    local_rank = int(os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK", 0))
-
-    master_addr = os.environ.get("HOSTNAME", None)
-    if master_addr is None:
-        raise ValueError("HOSTNAME environment variable is not set")
-    master_port = "29500"
-
-    # os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
-    torch.cuda.set_device(local_rank) # set default device
-    os.environ["WORLD_SIZE"] = str(world_size)
-    os.environ["RANK"] = str(world_rank)
-    os.environ["LOCAL_RANK"] = str(local_rank)
-    os.environ["MASTER_ADDR"] = master_addr
-    os.environ["MASTER_PORT"] = master_port
-    return world_size, world_rank, local_rank
 
 @dataclass
 class ModelArguments:
@@ -139,36 +105,14 @@ class DataTrainingArguments:
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
 
-    dst_task_prefix: Optional[str] = field(
-        default="対話から信念状態を推定:",
-        metadata={"help": "A prefix to add before every input text of dialogue state tracking (DST) task."},
+    input_text_column: Optional[str] = field(
+        default=None,
+        metadata={"help": "The name of the column in the datasets containing the input text."},
     )
-    rg_task_prefix: Optional[str] = field(
-        default="対話から応答を生成:",
-        metadata={"help": "A prefix to add before every input text of response generation (RG) task."},
+    output_text_column: Optional[str] = field(
+        default=None,
+        metadata={"help": "The name of the column in the datasets containing the output text."},
     )
-
-    user_utterance_prefix: Optional[str] = field(
-        default="<顧客>",
-        metadata={"help": "A prefix to add before every user utterance text."},
-    )
-    system_utterance_prefix: Optional[str] = field(
-        default="<店員>",
-        metadata={"help": "A prefix to add before every system utterance text."},
-    )
-    belief_state_prefix: Optional[str] = field(
-        default="<信念状態>",
-        metadata={"help": "A prefix to add before every belief state text."},
-    )
-    db_result_prefix: Optional[str] = field(
-        default="<検索結果>",
-        metadata={"help": "A prefix to add before every db result text."},
-    )
-    book_result_prefix: Optional[str] = field(
-        default="<予約結果>",
-        metadata={"help": "A prefix to add before every book result text."},
-    )
-
 
     train_file: Optional[str] = field(
         default=None, metadata={"help": "The input training data file (a jsonlines or csv file)."}
@@ -267,6 +211,26 @@ class DataTrainingArguments:
                 assert extension in ["csv", "json"], "`validation_file` should be a csv or a json file."
         if self.val_max_target_length is None:
             self.val_max_target_length = self.max_target_length
+
+def set_mpi_env():
+    world_size = int(os.environ.get("OMPI_COMM_WORLD_SIZE", 1))
+    world_rank = int(os.environ.get("OMPI_COMM_WORLD_RANK", 0))
+    local_rank = int(os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK", 0))
+
+    master_addr = os.environ.get("HOSTNAME", None)
+    if master_addr is None:
+        raise ValueError("HOSTNAME environment variable is not set")
+    master_port = "29500"
+
+    # os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
+    torch.cuda.set_device(local_rank) # set default device
+    os.environ["WORLD_SIZE"] = str(world_size)
+    os.environ["RANK"] = str(world_rank)
+    os.environ["LOCAL_RANK"] = str(local_rank)
+    os.environ["MASTER_ADDR"] = master_addr
+    os.environ["MASTER_PORT"] = master_port
+    return world_size, world_rank, local_rank
+
 
 def main():
 
@@ -443,28 +407,8 @@ def main():
     def preprocess_function(examples):
         # remove pairs where at least one record is None
 
-        speaker2prefix = {"USER": data_args.user_utterance_prefix,
-                          "SYSTEM": data_args.system_utterance_prefix}
-
-        inputs = []
-        targets = []
-        for context, state, db_result, book_result, response in zip(examples["context"],
-                                                                           examples["state_str"],
-                                                                           examples["db_result_str"],
-                                                                           examples["book_result_str"],
-                                                                           examples["response"]):
-            context = " ".join([f"{speaker2prefix[speaker]} {utterance}" for speaker, utterance in context])
-            
-            # DST
-            inputs.append((f"{data_args.dst_task_prefix} {context}"))
-            targets.append(state)
-
-            # Response Generation
-            inputs.append((f"{data_args.rg_task_prefix} {context} "
-                           f"{data_args.belief_state_prefix} {state} "
-                           f"{data_args.db_result_prefix} {db_result} "
-                           f"{data_args.book_result_prefix} {book_result}"))
-            targets.append(response)
+        inputs = examples[data_args.input_text_column]
+        targets = examples[data_args.output_text_column]
         
         default_trunction_side = tokenizer.truncation_side
         tokenizer.truncation_side = "left"
@@ -524,38 +468,6 @@ def main():
         pad_to_multiple_of=8 if training_args.fp16 else None,
     )
 
-    # Metric
-    metric = evaluate.load("rouge")
-
-    def postprocess_text(preds, labels):
-        preds = [pred.strip() for pred in preds]
-        labels = [label.strip() for label in labels]
-
-        # rougeLSum expects newline after each sentence
-        preds = ["\n".join(nltk.sent_tokenize(pred)) for pred in preds]
-        labels = ["\n".join(nltk.sent_tokenize(label)) for label in labels]
-
-        return preds, labels
-
-    def compute_metrics(eval_preds):
-        preds, labels = eval_preds
-        if isinstance(preds, tuple):
-            preds = preds[0]
-        # Replace -100s used for padding as we can't decode them
-        preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
-        decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
-        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-        # Some simple post-processing
-        decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
-
-        result = metric.compute(predictions=decoded_preds, references=decoded_labels, use_stemmer=True)
-        result = {k: round(v * 100, 4) for k, v in result.items()}
-        prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
-        result["gen_len"] = np.mean(prediction_lens)
-        return result
-
     # Initialize our Trainer
     trainer = Seq2SeqTrainer(
         model=model,
@@ -564,7 +476,6 @@ def main():
         eval_dataset=eval_dataset if training_args.do_eval else None,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        compute_metrics=compute_metrics if training_args.predict_with_generate else None,
     )
 
     # Training

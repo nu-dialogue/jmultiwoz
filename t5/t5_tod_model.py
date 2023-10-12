@@ -8,10 +8,18 @@ from transformers import (
 
 from tod_model_base import TODModelBase
 
+from data_utils import (
+    context_list2str,
+    state_dict2str,
+    state_str2dict,
+    db_result_dict2str,
+    book_result_dict2str,
+)
+
 class T5TODModel(TODModelBase):
     def __init__(self, model_name_or_path: str, device: Union[str, int], max_input_length: str, max_output_length: str,
                  dst_task_prefix: str, rg_task_prefix: str, user_utterance_prefix: str, system_utterance_prefix: str,
-                 belief_state_prefix: str, db_result_prefix: str, book_result_prefix: str):
+                 state_prefix: str, db_result_prefix: str, max_candidate_entities: int, book_result_prefix: str):
         
         self.device = device
         config = AutoConfig.from_pretrained(model_name_or_path)
@@ -25,11 +33,15 @@ class T5TODModel(TODModelBase):
         self.rg_task_prefix = rg_task_prefix
         self.user_utterance_prefix = user_utterance_prefix
         self.system_utterance_prefix = system_utterance_prefix
-        self.belief_state_prefix = belief_state_prefix
+        self.state_prefix = state_prefix
         self.db_result_prefix = db_result_prefix
+        self.max_candidate_entities = max_candidate_entities
         self.book_result_prefix = book_result_prefix
 
-    def generate(self, input_text: str, do_sample: bool = True, top_p: float = 0.95, num_beams: float = 5) -> str:
+    def init_session(self):
+        pass
+
+    def _generate(self, input_text: str, **kwargs) -> str:
         default_trunction_side = self.tokenizer.truncation_side
         self.tokenizer.truncation_side = "left"
         model_inputs = self.tokenizer([input_text], max_length=self.max_input_length, truncation=True, return_tensors="pt")
@@ -39,30 +51,44 @@ class T5TODModel(TODModelBase):
             input_ids=model_inputs.input_ids.to(self.device),
             attention_mask=model_inputs.attention_mask.to(self.device),
             max_length=self.max_output_length,
-            do_sample=do_sample,
-            top_p=top_p,
-            num_beams=num_beams,
+            **kwargs
         )
         output_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         return output_text
     
-    def predict_state(self, context: List[Tuple[str, str]]) -> str:
-        speaker2prefix = {"USER": self.user_utterance_prefix,
-                          "SYSTEM": self.system_utterance_prefix}
-        context = " ".join([f"{speaker2prefix[speaker]} {utterance}" for speaker, utterance in context])
+    def predict_state(self, context: List[Tuple[str, str]]) -> Tuple[dict, dict]:
+        context_str = context_list2str(
+            context=context,
+            user_utterance_prefix=self.user_utterance_prefix,
+            system_utterance_prefix=self.system_utterance_prefix
+        )
 
-        input_text = f"{self.dst_task_prefix} {context}"
-        output_text = self.generate(input_text, do_sample=False, top_p=1.0, num_beams=5)
-        return output_text
+        input_text = f"{self.dst_task_prefix} {context_str}"
+        state_str = self._generate(input_text, do_sample=False, top_p=1.0, num_beams=1)
+        belief_state, book_state = state_str2dict(state_str)
+        return belief_state, book_state
     
-    def generate_response(self, context: List[Tuple[str, str]], belief_state: str, db_result: str, book_result: str) -> str:
-        speaker2prefix = {"USER": self.user_utterance_prefix,
-                          "SYSTEM": self.system_utterance_prefix}
-        context = " ".join([f"{speaker2prefix[speaker]} {utterance}" for speaker, utterance in context])
-
-        input_text = (f"{self.rg_task_prefix} {context} "
-                      f"{self.belief_state_prefix} {belief_state} "
-                      f"{self.db_result_prefix} {db_result} "
-                      f"{self.book_result_prefix} {book_result}")
-        output_text = self.generate(input_text, do_sample=True, top_p=0.95, num_beams=1)
+    def generate_response(self, context: List[Tuple[str, str]], belief_state: dict, book_state: dict,
+                          db_result: str, book_result: dict) -> str:
+        context_str = context_list2str(
+            context=context,
+            user_utterance_prefix=self.user_utterance_prefix,
+            system_utterance_prefix=self.system_utterance_prefix
+        )
+        state_str = state_dict2str(
+            belief_state=belief_state,
+            book_state=book_state
+        )
+        db_result_str = db_result_dict2str(
+            db_result=db_result,
+            max_candidate_entities=self.max_candidate_entities
+        )
+        book_result_str = book_result_dict2str(
+            book_result=book_result
+        )
+        input_text = (f"{self.rg_task_prefix} {context_str} "
+                      f"{self.state_prefix} {state_str} "
+                      f"{self.db_result_prefix} {db_result_str} "
+                      f"{self.book_result_prefix} {book_result_str}")
+        output_text = self._generate(input_text, do_sample=False, top_p=1.0, num_beams=1)
         return output_text
