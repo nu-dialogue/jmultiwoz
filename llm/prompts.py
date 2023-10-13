@@ -18,6 +18,24 @@ STATE_TRACKING_PROMPTS = {
 また，文脈中で言及されなかったスロットの値も抽出しないでください．
 """,
 
+# === 対話例 1 ===
+# ### 入力
+# <顧客> 福岡へ行くよていなのですが、値段が普通くらいの宿泊施設を探してもらっていいですか？ <店員> かしこまりました。ではWITH THE STYLE FUKUOKAはいかがでしょうか。 <顧客> "なるほど。でも最寄り駅が海ノ中道駅で、駐車場を無料で利用できるとこがいいんですよね。
+# ### 出力
+# <信念状態> active_domain hotel, city 福岡
+# === 対話例 2 ===
+# ### 入力
+# <顧客> そうですか。では、スポーツ用品以外でも大丈夫です。 <店員> 大阪中央区には、駐車場無料の買い物施設は３件ありますが、なんばCITYをお勧めします。 <顧客> そこにします。住所と営業時間と近辺の駅からの所要時間を調べてもらえます？ <店員> 住所は大阪府大阪市中央区難波5丁目1-60、営業時間は11:00～21:00、難波駅から徒歩で1分です。 <顧客> わかりました。Wi-Fiと駐車場が無料利用できる観光名所も探してほしいです。
+# ### 出力
+# <信念状態> active_domain attraction, city 大阪
+# === 対話例 3 ===
+# ### 入力
+# <店員> エリアでいうと太白区にある、仙台市野草園はいかがでしょう？ジャンルは、自然、公園となります。 <顧客> そこにします。定休日はありますか？ <店員> 定休日は12月1日から3月19日となります。 <顧客> では、9月30日の青葉区の天気はわかりますか？
+# ### 出力
+# <信念状態> active_domain weather, city 仙台
+# ======
+# では，以下の事例を完了してください:
+
 "restaurant": """
 対話文脈から判断できる，レストランに関するスロットと値ペア（信念状態）を抽出してください．
 信念状態は半角スペースとカンマを使用し，`スロット1 値1, スロット2 値2` という形式で抽出してください．
@@ -156,15 +174,15 @@ RESPONSE_GENERATION_PROMPTS = {
 }
 
 class PromptFormater:
-    def __init__(self, user_utterance_prefix: str, system_utterance_prefix: str, state_prefix: str,
-                 db_result_prefix: str, max_candidate_entities: int, book_result_prefix: str, response_prefix: str):
+    def __init__(self, max_context_turns: int, user_utterance_prefix: str, system_utterance_prefix: str,
+                 state_prefix: str, db_result_prefix: str, max_candidate_entities: int, book_result_prefix: str):
+        self.max_context_turns = max_context_turns
         self.user_utterance_prefix = user_utterance_prefix
         self.system_utterance_prefix = system_utterance_prefix
         self.state_prefix = state_prefix
         self.db_result_prefix = db_result_prefix
         self.max_candidate_entities = max_candidate_entities
         self.book_result_prefix = book_result_prefix
-        self.response_prefix = response_prefix
         
     def make_state_prompt(self, domain: str, context: List[Tuple[str, str]], fewshot_examples: Optional[List[dict]] = None):
         prompt = STATE_TRACKING_PROMPTS[domain]
@@ -173,6 +191,7 @@ class PromptFormater:
             for i, example in enumerate(fewshot_examples):
                 context_str = context_list2str(
                     context=example["context"],
+                    max_context_turns=self.max_context_turns,
                     user_utterance_prefix=self.user_utterance_prefix,
                     system_utterance_prefix=self.system_utterance_prefix
                 )
@@ -191,6 +210,7 @@ class PromptFormater:
         
         context_str = context_list2str(
             context=context,
+            max_context_turns=self.max_context_turns,
             user_utterance_prefix=self.user_utterance_prefix,
             system_utterance_prefix=self.system_utterance_prefix
         )
@@ -209,6 +229,7 @@ class PromptFormater:
             for i, example in enumerate(fewshot_examples):
                 context_str = context_list2str(
                     context=example["context"],
+                    max_context_turns=self.max_context_turns,
                     user_utterance_prefix=self.user_utterance_prefix,
                     system_utterance_prefix=self.system_utterance_prefix
                 )
@@ -233,12 +254,13 @@ class PromptFormater:
                            f"{self.db_result_prefix} {db_result_str}\n"
                            f"{self.book_result_prefix} {book_result_str}\n"
                             "### 出力\n"
-                           f"{self.response_prefix} {response}\n")
+                           f"{self.system_utterance_prefix} {response}\n")
             prompt += ("======\n"
                        "では，以下の事例を完了してください:\n")
         
         context_str = context_list2str(
             context=context,
+            max_context_turns=self.max_context_turns,
             user_utterance_prefix=self.user_utterance_prefix,
             system_utterance_prefix=self.system_utterance_prefix
         )
@@ -262,6 +284,6 @@ class PromptFormater:
                    f"{self.db_result_prefix} {db_result_str}\n"
                    f"{self.book_result_prefix} {book_result_str}\n"
                    f"### 出力\n"
-                   f"{self.response_prefix} ")
+                   f"{self.system_utterance_prefix} ")
         
         return prompt
