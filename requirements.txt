@@ -9,8 +9,11 @@ urllib3==1.26.6 # https://stackoverflow.com/a/76187415
 nltk
 sentencepiece != 0.1.92
 protobuf
-rouge-score
 tensorboard
 tensorboardX
 sacrebleu[ja]
 openai
+langchain==0.0.86
+faiss-cpu
+sentence-transformers
+fugashi[unidic-lite]
