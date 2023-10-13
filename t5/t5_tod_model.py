@@ -17,7 +17,7 @@ from data_utils import (
 )
 
 class T5TODModel(TODModelBase):
-    def __init__(self, model_name_or_path: str, device: Union[str, int], max_input_length: str, max_output_length: str,
+    def __init__(self, model_name_or_path: str, device: Union[str, int], max_context_turns: int, max_input_length: str, max_output_length: str,
                  dst_task_prefix: str, rg_task_prefix: str, user_utterance_prefix: str, system_utterance_prefix: str,
                  state_prefix: str, db_result_prefix: str, max_candidate_entities: int, book_result_prefix: str):
         
@@ -26,6 +26,7 @@ class T5TODModel(TODModelBase):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, use_fast=True)
         self.t5_model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, config=config).to(self.device)
         
+        self.max_context_turns = max_context_turns
         self.max_input_length = max_input_length
         self.max_output_length = max_output_length
 
@@ -59,6 +60,7 @@ class T5TODModel(TODModelBase):
     def predict_state(self, context: List[Tuple[str, str]]) -> Tuple[dict, dict]:
         context_str = context_list2str(
             context=context,
+            max_context_turns=self.max_context_turns,
             user_utterance_prefix=self.user_utterance_prefix,
             system_utterance_prefix=self.system_utterance_prefix
         )
@@ -72,6 +74,7 @@ class T5TODModel(TODModelBase):
                           db_result: str, book_result: dict) -> str:
         context_str = context_list2str(
             context=context,
+            max_context_turns=self.max_context_turns,
             user_utterance_prefix=self.user_utterance_prefix,
             system_utterance_prefix=self.system_utterance_prefix
         )

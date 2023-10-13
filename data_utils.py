@@ -101,11 +101,13 @@ default_book_result = {
     }
 }
 
-def context_list2str(context: List[Tuple[str, str]], user_utterance_prefix: str, system_utterance_prefix: str) -> str:
+def context_list2str(context: List[Tuple[str, str]], max_context_turns: int,
+                     user_utterance_prefix: str, system_utterance_prefix: str) -> str:
     speaker2prefix = {"USER": user_utterance_prefix,
                       "SYSTEM": system_utterance_prefix}
-    context = " ".join([f"{speaker2prefix[speaker]} {utterance}" for speaker, utterance in context])
-    return context
+    context_str = " ".join([f"{speaker2prefix[speaker]} {utterance}"
+                            for speaker, utterance in context[-max_context_turns:]])
+    return context_str
 
 def state_dict2str(belief_state: dict, book_state: dict) -> str:
     flat_state = []

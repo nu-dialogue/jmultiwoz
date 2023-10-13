@@ -4,19 +4,19 @@
 #PJM -L elapse=48:00:00
 #PJM -j
 #PJM -S
-#PJM -o train-large-bs32-ep5.log
+#PJM -o train-base-bs32-ep5.log
 
-module load gcc/11.3.0
-module load cuda/11.7.1
-module load openmpi_cuda/4.1.5
-module load cudnn/8.9.2
-module load nccl/2.18.3
+module load gcc/10.3.0
+module load cuda/11.6.2
+module load cudnn/8.3.3
+module load openmpi_cuda/4.1.2
+module load nccl/2.12.7
 
 . ../.venv/bin/activate
 
 export CUDA_VISIBLE_DEVICES="0,1,2,3"
 
-OUTPUT_DIR="output/t5-large-bs32-ep5-len256"
+OUTPUT_DIR="output/t5-base-bs32-ep5-len256"
 # torchrun --nproc_per_node=4 --nnodes 1 train.py \
 mpirun \
     -n 16 \
@@ -26,7 +26,7 @@ mpirun \
     python train.py \
         --do_train \
         --do_eval \
-        --model_name_or_path "retrieva-jp/t5-large-long" \
+        --model_name_or_path "retrieva-jp/t5-base-long" \
         --overwrite_output_dir \
         --output_dir "${OUTPUT_DIR}/checkpoints" \
         --logging_dir "${OUTPUT_DIR}/log" \

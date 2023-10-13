@@ -4,8 +4,6 @@ import json
 import argparse
 from tqdm import tqdm
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from jmultiwoz import JMultiWOZDataset
 
 from data_utils import (
@@ -27,6 +25,7 @@ def main(args):
             for context, turn in dataset.iter_dialogue_turns(split=split_name, dialogue_name=dialogue_name):
                 context_str = context_list2str(
                     context=context,
+                    max_context_turns=args.max_context_turns,
                     user_utterance_prefix=args.user_utterance_prefix,
                     system_utterance_prefix=args.system_utterance_prefix
                 )
@@ -76,6 +75,8 @@ if __name__ == "__main__":
     parser.add_argument("--preprocessed_dpath", type=str, required=True,
                         help="Path to the directory to save the preprocessed dataset.")
 
+    parser.add_argument("--max_context_turns", type=int, default=0,
+                        help="Number of context turns to use. Set to 0 to use all context turns.")
     parser.add_argument("--dst_task_prefix", type=str, default="対話から信念状態を推定:", 
                         help="A prefix to add before every input text of dialogue state tracking (DST) task.")
     parser.add_argument("--rg_task_prefix", type=str, default="対話から応答を生成:",

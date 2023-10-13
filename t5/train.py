@@ -105,12 +105,12 @@ class DataTrainingArguments:
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
 
-    input_text_column: Optional[str] = field(
-        default=None,
+    input_text_column: str = field(
+        default="input_text",
         metadata={"help": "The name of the column in the datasets containing the input text."},
     )
-    output_text_column: Optional[str] = field(
-        default=None,
+    output_text_column: str = field(
+        default="output_text",
         metadata={"help": "The name of the column in the datasets containing the output text."},
     )
 
@@ -406,7 +406,6 @@ def main():
 
     def preprocess_function(examples):
         # remove pairs where at least one record is None
-
         inputs = examples[data_args.input_text_column]
         targets = examples[data_args.output_text_column]
         

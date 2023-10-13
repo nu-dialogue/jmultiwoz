@@ -59,6 +59,11 @@ class TODModelArguments:
         metadata={"help": "The maximum number of candidate entities to show in DB result."}
     )
 
+    max_context_turns: int = field(
+        default=0,
+        metadata={"help": "The maximum number of context turns to use. Set to 0 to use all context turns."}
+    )
+
     max_input_length: Optional[int] = field(
         default=512,
         metadata={
@@ -78,6 +83,15 @@ class TODModelArguments:
         },
     )
 
+    faiss_db_fprefix: Optional[str] = field(
+        default="llm/output/faiss_db/hf-sup-simcse-ja-large-ctx2-d20",
+        metadata={"help": "Path to the faiss db file. Only used for openai-fs model."},
+    )
+    num_fewshot_examples: Optional[int] = field(
+        default=2,
+        metadata={"help": "The number of few-shot examples to use for openai-fs model."},
+    )
+
 @dataclass
 class InferenceArguments:
     output_dir: str = field(
@@ -91,6 +105,11 @@ class InferenceArguments:
         default="dataset/JMultiWOZ_1.0",
         metadata={"help": "Path to the dataset directory."}
     )
+    num_dialogues: Optional[int] = field(
+        default=None,
+        metadata={"help": "The number of dialogues to use for evaluation. If None, use all dialogues."}
+    )
+
     world_size: int = field(
         default=1,
         metadata={"help": "The number of processes to use for evaluation."}
@@ -102,6 +121,7 @@ def load_tod_model(tod_model_args, device="cuda"):
         tod_model = T5TODModel(
             model_name_or_path=tod_model_args.model_name_or_path,
             device=device,
+            max_context_turns=tod_model_args.max_context_turns,
             max_input_length=tod_model_args.max_input_length,
             max_output_length=tod_model_args.max_output_length,
             dst_task_prefix=tod_model_args.dst_task_prefix,
@@ -117,6 +137,7 @@ def load_tod_model(tod_model_args, device="cuda"):
         from llm.openai_tod_model import OpenAIZeroShotTODModel
         tod_model = OpenAIZeroShotTODModel(
             openai_model_name=tod_model_args.model_name_or_path,
+            max_context_turns=tod_model_args.max_context_turns,
             max_output_length=tod_model_args.max_output_length,
             user_utterance_prefix=tod_model_args.user_utterance_prefix,
             system_utterance_prefix=tod_model_args.system_utterance_prefix,
@@ -124,10 +145,22 @@ def load_tod_model(tod_model_args, device="cuda"):
             db_result_prefix=tod_model_args.db_result_prefix,
             max_candidate_entities=tod_model_args.max_candidate_entities,
             book_result_prefix=tod_model_args.book_result_prefix,
-            response_prefix=tod_model_args.rg_task_prefix,
         )
     elif tod_model_args.tod_model_type == "openai-fs":
-        raise NotImplementedError
+        from llm.openai_tod_model import OpenAIFewShotTODModel
+        tod_model = OpenAIFewShotTODModel(
+            openai_model_name=tod_model_args.model_name_or_path,
+            max_context_turns=tod_model_args.max_context_turns,
+            max_output_length=tod_model_args.max_output_length,
+            user_utterance_prefix=tod_model_args.user_utterance_prefix,
+            system_utterance_prefix=tod_model_args.system_utterance_prefix,
+            state_prefix=tod_model_args.state_prefix,
+            db_result_prefix=tod_model_args.db_result_prefix,
+            max_candidate_entities=tod_model_args.max_candidate_entities,
+            book_result_prefix=tod_model_args.book_result_prefix,
+            faiss_db_fprefix=tod_model_args.faiss_db_fprefix,
+            num_fewshot_examples=tod_model_args.num_fewshot_examples,
+        )
     else:
         raise ValueError(f"Invalid tod_model_type: {tod_model_args.tod_model_type}")
     return tod_model
@@ -149,8 +182,6 @@ def e2e_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, d
         tod_model.init_session()
         for context, true_turn in dataset.iter_dialogue_turns(split="test", dialogue_name=dialogue_name):
             assert true_turn["speaker"] == "SYSTEM", "Must be system turn."
-
-            # breakpoint()
 
             # 1. Dialogue State Tracking
             belief_state, book_state = tod_model.predict_state(
@@ -258,6 +289,9 @@ def main():
         dataset_dpath=infer_args.dataset_dpath
     )
     dialogue_names = dataset.list_dialogues(split="test")
+    if infer_args.num_dialogues is not None:
+        dialogue_names = dialogue_names[:infer_args.num_dialogues]
+    print(f"Number of dialogues: {len(dialogue_names)}")
 
     dialogue_names_by_process = {
         rank : names.tolist() for rank, names in enumerate(

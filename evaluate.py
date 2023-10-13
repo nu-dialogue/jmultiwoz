@@ -86,7 +86,7 @@ def main():
     )
     df_hyp = dialogues_to_df(dialogues_hyp)
 
-    assert df_ref.index.equals(df_hyp.index), "Reference and hypothesis dataframes have different indices."
+    # assert df_ref.index.equals(df_hyp.index), "Reference and hypothesis dataframes have different indices."
 
     df = df_ref.merge(df_hyp.add_prefix("hyp/"), left_index=True, right_index=True)
 

@@ -16,6 +16,11 @@ class JMultiWOZDataset:
             self.dialogues[split] = {}
             for dialogue_name in dialogue_names:
                 self.dialogues[split][dialogue_name] = dialogues[dialogue_name]
+    
+    @property
+    def available_domains(self) -> List[str]:
+        return list(self.ontology.keys())
+    
     def get_dialogues(self, split: str) -> dict:
         return self.dialogues[split]
 
@@ -30,10 +35,10 @@ class JMultiWOZDataset:
         context = []
         for turn in dialogue["turns"]:
             if turn["speaker"] == "USER":
-                context.append(("USER", turn["utterance"]))
+                context = context + [("USER", turn["utterance"])]
             else:
                 yield context, turn
-                context.append(("SYSTEM", turn["utterance"]))
+                context = context + [("SYSTEM", turn["utterance"])]
 
 class JMultiWOZDatabase:
     def __init__(self, db_dpath):
