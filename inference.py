@@ -59,11 +59,6 @@ class TODModelArguments:
         metadata={"help": "The maximum number of candidate entities to show in DB result."}
     )
 
-    max_context_turns: int = field(
-        default=0,
-        metadata={"help": "The maximum number of context turns to use. Set to 0 to use all context turns."}
-    )
-
     max_input_length: Optional[int] = field(
         default=512,
         metadata={
@@ -121,7 +116,7 @@ def load_tod_model(tod_model_args, device="cuda"):
         tod_model = T5TODModel(
             model_name_or_path=tod_model_args.model_name_or_path,
             device=device,
-            max_context_turns=tod_model_args.max_context_turns,
+            max_context_turns=0, # Use all context turns on T5 model
             max_input_length=tod_model_args.max_input_length,
             max_output_length=tod_model_args.max_output_length,
             dst_task_prefix=tod_model_args.dst_task_prefix,
@@ -137,7 +132,7 @@ def load_tod_model(tod_model_args, device="cuda"):
         from llm.openai_tod_model import OpenAIZeroShotTODModel
         tod_model = OpenAIZeroShotTODModel(
             openai_model_name=tod_model_args.model_name_or_path,
-            max_context_turns=tod_model_args.max_context_turns,
+            max_context_turns=5, # Use 5 context turns on OpenAI model
             max_output_length=tod_model_args.max_output_length,
             user_utterance_prefix=tod_model_args.user_utterance_prefix,
             system_utterance_prefix=tod_model_args.system_utterance_prefix,
@@ -150,7 +145,7 @@ def load_tod_model(tod_model_args, device="cuda"):
         from llm.openai_tod_model import OpenAIFewShotTODModel
         tod_model = OpenAIFewShotTODModel(
             openai_model_name=tod_model_args.model_name_or_path,
-            max_context_turns=tod_model_args.max_context_turns,
+            max_context_turns=5, # Use 5 context turns on OpenAI model
             max_output_length=tod_model_args.max_output_length,
             user_utterance_prefix=tod_model_args.user_utterance_prefix,
             system_utterance_prefix=tod_model_args.system_utterance_prefix,
