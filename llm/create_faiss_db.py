@@ -32,7 +32,7 @@ def main(args):
     for dialogue_name in dialogue_names:
         print("Current data: ")
         print(", ".join([f"{domain}: {cnt:02d}" for domain, cnt in domain_counter.items()]))
-        goal = dataset.get_dialogue_goal(split=args.split, dialogue_name=dialogue_name)
+        goal = dataset.get_dialogue(split=args.split, dialogue_name=dialogue_name)["goal"]
 
         if all([cnt >= args.dialogues_per_domain for cnt in domain_counter.values()]):
             # Break if all domains have enough dialogues

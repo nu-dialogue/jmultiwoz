@@ -1,21 +1,35 @@
+import os
 import json
+import datetime
+import argparse
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
-from interface import INTERFACE_HTML
-from sessions import DialogueSessions
+# from interface import INTERFACE_HTML
+from interface_2cols import INTERFACE_HTML
+from world import TOD_MODEL_KWARGS, JMultiWOZWorld
 
 STYLE_SHEET = "https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.4/css/bulma.css"
 FONT_AWESOME = "https://use.fontawesome.com/releases/v5.3.1/js/all.js"
-MAX_TURN = 20
-
 
 def server(args):
+    os.makedirs(args.output_dpath) # Do not overwrite existing directory.
 
+    json.dump(
+        args.__dict__, open(os.path.join(args.output_dpath, "human_eval_args.json"), "w"),
+        indent=4, ensure_ascii=False
+    )
+    json.dump(
+        TOD_MODEL_KWARGS, open(os.path.join(args.output_dpath, "tod_model_args.json"), "w"),
+        indent=4, ensure_ascii=False
+    )
     
-    dialogue_sessions = DialogueSessions(
-        tod_models=,
-        dataset_dpath=...,
+    jmultiwoz_world = JMultiWOZWorld(
+        tod_model_names=args.tod_model_names,
+        dataset_dpath=args.jmultiwoz_dataset_dpath,
+        max_turns=args.max_turns,
+        success_phrase="success",
+        failure_phrase="failure",
     )
 
     class MyHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -50,13 +64,12 @@ def server(args):
                     self.wfile.write(bytes(content, 'UTF-8'))
 
                 elif parsed_path.path == '/dialogue':
-                    session_id, goal_description_str = dialogue_sessions.make_new_session()
+                    session_id, instruction = jmultiwoz_world.create_new_session()
                     content = INTERFACE_HTML.format(
-                        style_sheet_href=STYLE_SHEET,
+                        stylesheet_href=STYLE_SHEET,
                         font_src=FONT_AWESOME,
                         session_id=session_id,
-                        goal_description=goal_description_str,
-                        max_turn=MAX_TURN,
+                        instruction=instruction,
                     )
                     self.wfile.write(bytes(content, 'UTF-8'))
 
@@ -78,17 +91,28 @@ def server(args):
                     body = json.loads(content)
 
                     print('body = {}'.format(body))
-                    
-                    resp_text = dialogue_sessions.response(
-                        session_id=body['session_id'],
-                        input_text=body['user_input'],
+
+                    response_text, session_over = jmultiwoz_world.model_response(
+                        session_id=body["sessionId"],
+                        user_input=body["userInput"],
                     )
 
-                    print("sys: " + resp_text, flush=True)
-                    model_response = {"text": resp_text}
+                    if response_text is not None:
+                        print("sys: " + response_text, flush=True)
+                    model_response = {"text": response_text, "sessionOver": session_over}
+
+                    if session_over:
+                        print(f"Terminating session: {body['sessionId']}", flush=True)
+                        jmultiwoz_world.export_session(
+                            session_id=body["sessionId"],
+                            sessions_dpath=os.path.join(args.output_dpath, "sessions"),
+                        )
+                        jmultiwoz_world.terminate_session(session_id=body["sessionId"])
+
                 except Exception as e:
-                    print("error", e, flush=True)
-                    model_response = {"text": f"error Message: {e}"}
+                    # print("error", e, flush=True)
+                    # model_response = {"text": f"error Message: {e}", "session_over": False}
+                    raise e
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
@@ -106,4 +130,16 @@ def server(args):
 
 
 if __name__ == "__main__":
-    server()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tod_model_names", type=str, nargs="+", required=True,
+                        help="List of TOD model names.")
+    parser.add_argument("--output_dpath", type=str,
+                        default=f"human_eval_output/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}",
+                        help="Path to directory to save results.")
+    parser.add_argument("--jmultiwoz_dataset_dpath", type=str, default="dataset/JMultiWOZ_1.0",
+                        help="Path to JMultiWOZ dataset.")
+    parser.add_argument("--max_turns", type=int, default=40,
+                        help="Max turn per dialogue session.")
+    args = parser.parse_args()
+
+    server(args)

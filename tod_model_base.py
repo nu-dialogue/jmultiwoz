@@ -1,12 +1,22 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 class TODModelBase:
     def __init__(self, *args, **kwargs):
         raise NotImplementedError
     
-    def init_session(self):
+    def set_memory(self, memory: Optional[dict]) -> None:
         """
-        Initialize dialogue session.
+        Set memory of the model to continue dialogue session.
+        Args:
+            memory: Memory of the model. None means initializaion of dialogue session.
+        """
+        raise NotImplementedError
+    
+    def get_memory(self) -> Optional[dict]:
+        """
+        Get memory of the model to continue dialogue session.
+        Returns:
+            memory: Memory of the model.
         """
         raise NotImplementedError
 

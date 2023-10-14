@@ -54,9 +54,19 @@ class OpenAITODModel(TODModelBase):
         )
         self.max_context_turns = max_context_turns
         
-    def init_session(self):
-        self.previous_belief_state = deepcopy(default_belief_state)
-        self.previous_book_state = deepcopy(default_book_state)
+    def set_memory(self, memory: Optional[dict]) -> None:
+        if memory is None:
+            self.previous_belief_state = deepcopy(default_belief_state)
+            self.previous_book_state = deepcopy(default_book_state)
+        else:
+            self.previous_belief_state = deepcopy(memory["previous_belief_state"])
+            self.previous_book_state = deepcopy(memory["previous_book_state"])
+
+    def get_memory(self) -> dict:
+        return {
+            "previous_belief_state": deepcopy(self.previous_belief_state),
+            "previous_book_state": deepcopy(self.previous_book_state),
+        }
 
     def _prepare_fewshot_examples(self, context: List[Tuple[str, str]]) -> List[dict]:
         raise NotImplementedError

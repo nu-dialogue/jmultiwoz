@@ -62,43 +62,76 @@ INTERFACE_HTML = """
     align-items: flex-end;
     }}
 
+    .container {{
+        display: flex;
+        height: calc(100vh - 20px); /* Full viewport height */
+        max-width: 1200px; /* Set a max width so it doesn't stretch too wide on larger screens */
+        margin-top: 20px; /* Add 20px margin to the top */
+        margin-bottom: 20px; /* Add 20px margin to the bottom */
+        background-color: #F5F5F5;
+    }}
+
+    /* Left section styles */
+    .instructions {{
+        width: 50%; /* Adjust this width as needed */
+        border-right: 1px solid #ddd; /* Optional border to separate the two sections */
+        padding: 20px; /* Added padding for better spacing and readability */
+    }}
+
+    /* Right section styles */
+    .chat {{
+        width: 50%; /* Adjust this width as needed */
+        padding: 20px; /* Added padding for better spacing and readability */
+    }}
+
+    /* Chat messages */
+    #parent {{
+        overflow: auto; /* Added scroll to better handle multiple messages */
+        height: calc(100% - 100px); /* Adjust this height as needed */
+        padding-top: 1em;
+        padding-bottom: 0;
+    }}
+
     </style>
     <script defer src={font_src}></script>
     <head>
         <title>対話ページ</title>
     </head>
     <body>
-        <div class="columns" style="height: 100%">
-            <div class="column is-three-fifths is-offset-one-fifth">
-            <section class="hero is-info is-large has-background-light has-text-grey-dark" style="height: 100%">
-                <div id="parent" class="hero-body" style="overflow: auto; height: calc(100% - 76px); padding-top: 1em; padding-bottom: 0;">
-                    <article class="media">
+        <div class="container">
+            <!-- Instructions Section (Left Side) -->
+            <div class="instructions">
+                <article class="media">
                     <div class="media-content">
                         <div class="content">
-                        <p>
-                            <strong>インストラクション</strong>
-                            <br>
-                            {instruction}
-                        </p>
+                            <p>
+                                <strong>インストラクション</strong>
+                                <br>
+                                {instruction}
+                            </p>
                         </div>
                     </div>
-                    </article>
+                </article>
+            </div>
+            <!-- Chat Section (Right Side) -->
+            <div class="chat">
+                <div id="parent">
+                    <!-- Chat messages will go here -->
                 </div>
-                <div class="hero-foot column is-three-fifths is-offset-one-fifth" style="height: 76px">
-                <form id = "interact">
-                    <div class="field is-grouped">
-                        <p class="control is-expanded">
-                        <input class="input" type="text" id="userIn" placeholder="メッセージを入力してください" required>
-                        </p>
-                        <p class="control">
-                        <button id="respond" type="submit" class="button has-text-white-ter has-background-grey-dark">
-                            送信
-                        </button>
-                        </p>
-                    </div>
-                </form>
+                <div class="hero-foot column is-four-fifths is-offset-one-fifth" style="height: 80px">
+                    <form id="interact">
+                        <div class="field is-grouped">
+                            <p class="control is-expanded">
+                                <input class="input" type="text" id="userIn" placeholder="Input your message" required>
+                            </p>
+                            <p class="control">
+                                <button id="respond" type="submit" class="button has-text-white-ter has-background-grey-dark">
+                                    Send
+                                </button>
+                            </p>
+                        </div>
+                    </form>
                 </div>
-            </section>
             </div>
         </div>
         <script>
