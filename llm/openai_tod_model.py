@@ -30,8 +30,8 @@ def call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
         
         except openai.error.RateLimitError as e:
             print(e)
-            print("Rate limit exceeded. Waiting for 1 minute...")
-            time.sleep(60)
+            print("Rate limit exceeded. Waiting for 30 seconds...")
+            time.sleep(30)
             continue
 
         except openai.error.OpenAIError as e:
