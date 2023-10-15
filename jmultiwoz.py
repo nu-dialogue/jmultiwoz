@@ -27,8 +27,8 @@ class JMultiWOZDataset:
     def list_dialogues(self, split: str) -> List[str]:
         return self.split_list[split]
 
-    def get_dialogue_goal(self, split: str, dialogue_name: str) -> dict:
-        return self.dialogues[split][dialogue_name]["goal"]
+    def get_dialogue(self, split: str, dialogue_name: str) -> dict:
+        return self.dialogues[split][dialogue_name]
 
     def iter_dialogue_turns(self, split: str, dialogue_name: str) -> Tuple[List[Tuple[str, str]], dict]:
         dialogue = self.dialogues[split][dialogue_name]

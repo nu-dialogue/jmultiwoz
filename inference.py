@@ -6,6 +6,7 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import json
+from glob import glob
 
 import multiprocessing as standard_mp
 import torch.multiprocessing as torch_mp
@@ -104,6 +105,10 @@ class InferenceArguments:
         default=None,
         metadata={"help": "The number of dialogues to use for evaluation. If None, use all dialogues."}
     )
+    resume_last_run: bool = field(
+        default=False,
+        metadata={"help": "Whether to resume the last run. If True, use existing temporary results."}
+    )
 
     world_size: int = field(
         default=1,
@@ -169,7 +174,7 @@ def e2e_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, d
     results = {}
     print(f"Rank {rank} is processing {len(dialogue_names)} dialogues...")
     for dialogue_name in tqdm(dialogue_names):
-        goal = dataset.get_dialogue_goal(split="test", dialogue_name=dialogue_name)
+        goal = dataset.get_dialogue(split="test", dialogue_name=dialogue_name)["goal"]
         results[dialogue_name] = {
             "dialogue_name": dialogue_name,
             "turns": [],
@@ -217,13 +222,10 @@ def e2e_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, d
                 },
                 "utterance": response,
             })
-            # Save intermediate results temporarily
-            jsonline = json.dumps({
-                "dialogue_name": dialogue_name,
-                **results[dialogue_name]["turns"][-1],
-            }, ensure_ascii=False)
-            with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.{rank}.jsonl"), "a") as f:
-                f.write(jsonline + "\n")
+        # Save intermediate results temporarily
+        jsonline = json.dumps(results[dialogue_name], ensure_ascii=False)
+        with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.{rank}.jsonl"), "a") as f:
+            f.write(jsonline + "\n")
 
     results_by_rank[rank] = results
     # return results
@@ -257,13 +259,10 @@ def rg_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, da
                 "speaker": "SYSTEM",
                 "utterance": response,
             })
-            # Save intermediate results temporarily
-            jsonline = json.dumps({
-                "dialogue_name": dialogue_name,
-                **results[dialogue_name]["turns"][-1],
-            }, ensure_ascii=False)
-            with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.{rank}.jsonl"), "a") as f:
-                f.write(jsonline + "\n")
+        # Save intermediate results temporarily
+        jsonline = json.dumps(results[dialogue_name], ensure_ascii=False)
+        with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.{rank}.jsonl"), "a") as f:
+            f.write(jsonline + "\n")
 
     results_by_rank[rank] = results
     # return results
@@ -286,8 +285,20 @@ def main():
     dialogue_names = dataset.list_dialogues(split="test")
     if infer_args.num_dialogues is not None:
         dialogue_names = dialogue_names[:infer_args.num_dialogues]
-    print(f"Number of dialogues: {len(dialogue_names)}")
 
+    # Load temporary results
+    results = {}
+    if infer_args.resume_last_run:
+        for tmp_result_fpath in glob(
+            os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.*.jsonl")
+        ):
+            for line in open(tmp_result_fpath):
+                tmp_result = json.loads(line.strip())
+                results[tmp_result["dialogue_name"]] = tmp_result
+        print(f"Loaded {len(results)} temporary results.")
+        dialogue_names = [dial for dial in dialogue_names if dial not in results]
+
+    print(f"Number of dialogues: {len(dialogue_names)}")
     dialogue_names_by_process = {
         rank : names.tolist() for rank, names in enumerate(
             np.array_split(dialogue_names, infer_args.world_size)
@@ -330,7 +341,6 @@ def main():
             results_by_rank=results_by_rank,
         )
         
-    results = {}
     for rank in range(infer_args.world_size):
         results.update(results_by_rank[rank])
     
