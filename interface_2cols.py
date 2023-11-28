@@ -65,8 +65,7 @@ INTERFACE_HTML = """
     .container {{
         display: flex;
         height: calc(100vh - 20px); /* Full viewport height */
-        max-width: 1200px; /* Set a max width so it doesn't stretch too wide on larger screens */
-        margin-top: 20px; /* Add 20px margin to the top */
+        max-width: 1600px; /* Set a max width so it doesn't stretch too wide on larger screens */
         margin-bottom: 20px; /* Add 20px margin to the bottom */
         background-color: #F5F5F5;
     }}
@@ -76,6 +75,7 @@ INTERFACE_HTML = """
         width: 50%; /* Adjust this width as needed */
         border-right: 1px solid #ddd; /* Optional border to separate the two sections */
         padding: 20px; /* Added padding for better spacing and readability */
+        overflow: auto; /* Added scroll to better handle multiple messages */
     }}
 
     /* Right section styles */
@@ -104,11 +104,7 @@ INTERFACE_HTML = """
                 <article class="media">
                     <div class="media-content">
                         <div class="content">
-                            <p>
-                                <strong>インストラクション</strong>
-                                <br>
-                                {instruction}
-                            </p>
+                            <p>{instruction}</p>
                         </div>
                     </div>
                 </article>
@@ -138,6 +134,8 @@ INTERFACE_HTML = """
             var sessionId = "{session_id}";
             var outfile = sessionId + ".csv";
             var turn = 0;
+            var questionList = {question_list};
+            var answerList = {answer_list};
             var sessionOver = false;
             var botResponseDelay = 3000;
             // document.getElementById("turn").innerHTML = maxTurns;
@@ -220,7 +218,7 @@ INTERFACE_HTML = """
             function exportCSV() {{
                 var evalValues = [];
                 var messageArea = document.getElementById('messageArea');
-                for (var i = 0; i < 3; i++) {{
+                for (var i = 0; i < questionList.length; i++) {{
                     var name = 'q' + String(i+1);
                     var elements = document.getElementsByName(name);
                     for (var j = 0; j < elements.length; j++) {{
@@ -229,7 +227,7 @@ INTERFACE_HTML = """
                         }}
                     }}
                 }}
-                if (evalValues.length != 3) {{
+                if (evalValues.length != questionList.length) {{
                     alert("全ての設問に回答してください");
                     return;
                 }}
@@ -256,10 +254,25 @@ INTERFACE_HTML = """
                 window.URL.revokeObjectURL(url);
                 link.parentNode.removeChild(link);
 
+                sendEvalResult(evalValues);
+
                 // setTimeout(() => {{
                 // peer.destroy();
                 // window.location.href = '/finish';
                 // }}, 3000);
+            }}
+
+            function sendEvalResult(evalValues) {{
+                var send_info = {{"evalValues": evalValues, "sessionId": sessionId}};
+                fetch('/evaluate', {{
+                    headers: {{
+                        'Content-Type': 'application/json'
+                    }},
+                    method: 'POST',
+                    body: JSON.stringify(send_info)
+                }}).then(response=>response.json()).then(data=>{{
+                    console.log(data);
+                }})
             }}
 
             var parDiv = document.getElementById("parent");
@@ -339,22 +352,12 @@ INTERFACE_HTML = """
                     body: JSON.stringify(send_info)
                 }}).then(response=>response.json()).then(data=>{{
                     // myContext.push({{"spk": "[SPK2]", "utt": send_info["utt"]}});
-                    var botResponse = processBotUtterance(data.text);
+                    var botResponse = data.text;
                     sessionOver = data.sessionOver;
                     // botResponseDelay = Math.min(Math.max(10, botResponse.length), 30) * 1000;
                     botResponseDelay = 0;
                     setTimeout(addBotUtterance, botResponseDelay, botResponse);
                 }})
-            }}
-
-            function processBotUtterance(text) {{
-              var utt = text.replace("，", "、");
-              utt = utt.replace(",", "、");
-              utt = utt.replace("．", "。");
-              utt = utt.replace(".", "。");
-              utt = utt.replace("!", "！");
-              utt = utt.replace("?", "？");
-              return utt;
             }}
 
             function finishDialogue(parDiv, delay=0) {{
@@ -369,9 +372,8 @@ INTERFACE_HTML = """
 
             function createEvalForm() {{
                 var parDiv = document.getElementById("parent");
-                var questionList = ["1: 対話を通して、ボットの対話の流れはスムーズだった", "2: 対話を通して、ボットは十分な情報を提示していた", "3: 対話を通して、自分は対話に満足した"]
-                var answerList = ["1. 同意しない", "2. やや同意しない", "3. どちらでもない", "4. やや同意する", "5. 同意する"]
-                for (var j=0; j<3; j++) {{
+                var prevScrollHeight = parDiv.scrollHeight;
+                for (var j=0; j<questionList.length; j++) {{
                     var article = document.createElement("article");
                     article.className = "media";
                     var media = document.createElement("div");
@@ -381,7 +383,7 @@ INTERFACE_HTML = """
                     var q = document.createElement("p");
                     q.innerHTML = `<strong>${{questionList[j]}}</strong>`
                     content.appendChild(q);
-                    for (var i=0; i<5; i++) {{
+                    for (var i=0; i<answerList.length; i++) {{
                         var radio = document.createElement("label");
                         radio.style.display = 'block';
                         radio.style.padding = '5px';
@@ -393,7 +395,7 @@ INTERFACE_HTML = """
                     parDiv.append(article);
                 }}
                 parDiv.append(createChatRow("System", "全ての設問に回答したら、下の「評価結果をダウンロード」ボタンをクリックしてください。"));
-                parDiv.scrollTo(0, parDiv.scrollHeight);
+                parDiv.scrollTo(0, prevScrollHeight);
             }}
 
             document.getElementById("interact").addEventListener("reset", function(event){{

@@ -28,8 +28,6 @@ def server(args):
         tod_model_names=args.tod_model_names,
         dataset_dpath=args.jmultiwoz_dataset_dpath,
         max_turns=args.max_turns,
-        success_phrase="success",
-        failure_phrase="failure",
     )
 
     class MyHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -64,12 +62,14 @@ def server(args):
                     self.wfile.write(bytes(content, 'UTF-8'))
 
                 elif parsed_path.path == '/dialogue':
-                    session_id, instruction = jmultiwoz_world.create_new_session()
+                    html_format_args = jmultiwoz_world.create_new_session()
                     content = INTERFACE_HTML.format(
                         stylesheet_href=STYLE_SHEET,
                         font_src=FONT_AWESOME,
-                        session_id=session_id,
-                        instruction=instruction,
+                        instruction=html_format_args["instruction"],
+                        session_id=html_format_args["session_id"],
+                        question_list=html_format_args["question_list"],
+                        answer_list=html_format_args["answer_list"],
                     )
                     self.wfile.write(bytes(content, 'UTF-8'))
 
@@ -92,28 +92,54 @@ def server(args):
 
                     print('body = {}'.format(body))
 
-                    response_text, session_over = jmultiwoz_world.model_response(
+                    model_utterance, session_over = jmultiwoz_world.model_response(
                         session_id=body["sessionId"],
                         user_input=body["userInput"],
                     )
 
-                    if response_text is not None:
-                        print("sys: " + response_text, flush=True)
-                    model_response = {"text": response_text, "sessionOver": session_over}
-
-                    if session_over:
-                        print(f"Terminating session: {body['sessionId']}", flush=True)
-                        jmultiwoz_world.export_session(
-                            session_id=body["sessionId"],
-                            sessions_dpath=os.path.join(args.output_dpath, "sessions"),
-                        )
-                        jmultiwoz_world.terminate_session(session_id=body["sessionId"])
+                    if model_utterance is not None:
+                        print("sys: " + model_utterance, flush=True)
+                    model_response = {"text": model_utterance, "sessionOver": session_over}
 
                 except Exception as e:
-                    # print("error", e, flush=True)
-                    # model_response = {"text": f"error Message: {e}", "session_over": False}
-                    raise e
+                    print("error", e, flush=True)
+                    model_response = {"text": f"error Message: {e}", "session_over": False}
+                    # raise e
 
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                json_str = json.dumps(model_response)
+                self.wfile.write(bytes(json_str, 'utf-8'))
+
+            elif self.path == '/evaluate':
+                content_length = int(self.headers['content-length'])
+                try:
+                    content = self.rfile.read(content_length).decode('utf-8')
+                    body = json.loads(content)
+
+                    print('body = {}'.format(body))
+
+                    print(f"Saving evaluation: {body['sessionId']}", flush=True)
+                    jmultiwoz_world.save_eval_scores(
+                        session_id=body["sessionId"],
+                        eval_scores=body["evalValues"],
+                    )
+                    
+                    print(f"Terminating session: {body['sessionId']}", flush=True)
+                    jmultiwoz_world.export_session(
+                        session_id=body["sessionId"],
+                        sessions_dpath=os.path.join(args.output_dpath, "sessions"),
+                    )
+                    jmultiwoz_world.terminate_session(session_id=body["sessionId"])
+
+                    model_response = {"text": "Received evaluation results and terminated session."}
+                
+                except Exception as e:
+                    # print("error", e, flush=True)
+                    # model_response = {"text": f"error Message: {e}"}
+                    raise e
+                
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
@@ -124,10 +150,14 @@ def server(args):
     print("Start", flush=True)
     address = ('localhost', 8080)
 
-    MyHTTPRequestHandler.protocol_version = 'HTTP/1.0'
-    with HTTPServer(address, MyHTTPRequestHandler) as server:
-        server.serve_forever()
-
+    try:
+        MyHTTPRequestHandler.protocol_version = 'HTTP/1.0'
+        with HTTPServer(address, MyHTTPRequestHandler) as server:
+            server.serve_forever()
+    except KeyboardInterrupt:
+        jmultiwoz_world.export_unterminated_sessions(
+            sessions_dpath=os.path.join(args.output_dpath, "unterminated_sessions"),
+        )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

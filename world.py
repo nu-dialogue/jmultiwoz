@@ -14,12 +14,28 @@ from llm.openai_tod_model import OpenAIFewShotTODModel
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 TOD_MODEL_CLASS = {
+    "t5-base": T5TODModel,
     "t5-large": T5TODModel,
     "gpt3.5-fs": OpenAIFewShotTODModel,
     "gpt4-fs": OpenAIFewShotTODModel,
 }
 
 TOD_MODEL_KWARGS = {
+    "t5-base": {
+        "model_name_or_path": "t5/output/t5-base-bs32-ep5-olen256/checkpoints",
+        "device": "cuda:0",
+        "max_context_turns": 0,
+        "max_input_length": 512,
+        "max_output_length": 256,
+        "dst_task_prefix": "対話から信念状態を推定:",
+        "rg_task_prefix": "対話から応答を生成:",
+        "user_utterance_prefix": "<顧客>",
+        "system_utterance_prefix": "<店員>",
+        "state_prefix": "<信念状態>",
+        "db_result_prefix": "<検索結果>",
+        "max_candidate_entities": 3,
+        "book_result_prefix": "<予約結果>",
+    },
     "t5-large": {
         "model_name_or_path": "t5/output/t5-large-bs32-ep5-olen256/checkpoints",
         "device": "cuda:0",
@@ -49,7 +65,7 @@ TOD_MODEL_KWARGS = {
         "num_fewshot_examples": 2,
     },
     "gpt4-fs": {
-        "openai_model_name": "gpt-4-turbo",
+        "openai_model_name": "gpt-4",
         "max_context_turns": 5, # Use 5 context turns on OpenAI model
         "max_output_length": 256,
         "user_utterance_prefix": "<顧客>",
@@ -77,7 +93,8 @@ class DialogueGoalSampler:
 class DialogueSession:
     def __init__(self, session_id: str, dialogue_name: str, goal: dict, goal_description: str,
                  tod_model_name: str, tod_model: TODModelBase, database: JMultiWOZDatabase,
-                 max_turns: int, success_phrase: str, failure_phrase: str):
+                 max_turns: int, success_phrase: str, failure_phrase: str,
+                 eval_question_list: List[str] = None, eval_answer_list: List[str] = None,):
         self.session_id = session_id
         self.dialogue_name = dialogue_name
 
@@ -99,6 +116,10 @@ class DialogueSession:
         self.context = []
         self.subjective_success = False
         self.log = []
+
+        self.eval_question_list = eval_question_list
+        self.eval_answer_list = eval_answer_list
+        self.eval_scores = None
         
     def check_success_input(self, input_text: str) -> bool:
         return input_text.strip().lower() == self.success_phrase.lower()
@@ -112,13 +133,9 @@ class DialogueSession:
     def model_response(self, input_text: str) -> Tuple[str, str]:
         # Check success
         if self.check_success_input(input_text=input_text):
-            if len(self.context) < self.min_turns:
-                response = "【対話が短すぎます。もう少し対話を続けてください。】"
-                session_over = False
-            else:
-                response = "【対話を終了します。】"
-                session_over = True
-                self.subjective_success = True
+            response = "【対話を終了します。】"
+            session_over = True
+            self.subjective_success = True
             return response, session_over
         
         # Check failue
@@ -189,13 +206,15 @@ class DialogueSession:
             "goal_description": self.goal_description,
             "tod_model_name": self.tod_model_name,
             "subjective_success": self.subjective_success,
+            "eval_question_list": self.eval_question_list,
+            "eval_answer_list": self.eval_answer_list,
+            "eval_scores": self.eval_scores,
             "context": self.context,
             "log": self.log,
         })
 
 class JMultiWOZWorld:
-    def __init__(self, tod_model_names: List[str], dataset_dpath: str, max_turns: int,
-                 success_phrase: str, failure_phrase: str):
+    def __init__(self, tod_model_names: List[str], dataset_dpath: str, max_turns: int):
         self.tod_models = {}
         for tod_model_name in tod_model_names:
             print(f"Loading {tod_model_name} ...")
@@ -209,24 +228,41 @@ class JMultiWOZWorld:
         self.sessions = {}
         
         self.max_turns = max_turns
-        self.success_phrase = success_phrase
-        self.failure_phrase = failure_phrase
+        self.success_phrase = "success"
+        self.failure_phrase = "fail"
+
+        self.eval_question_list = [
+            "1. 全体を通して、チャットボットはあなたの発話を理解できていた。",
+            "2. 全体を通して、チャットボットの応答は適切だった。",
+            "3. 全体を通して、チャットボットとの対話は満足できるものだった。"
+        ]
+        self.eval_answer_list = [
+            "1. 同意しない", "2. やや同意しない", "3. どちらでもない", "4. やや同意する", "5. 同意する"
+        ]
 
     def _make_instruction(self, goal_description: dict) -> str:
         instruction = f"""
-以下の対話シナリオ文からタスクを読み取り、タスクを達成できるようにチャットボットとの対話を進めてください。<br>
-タスクは対話シナリオの上から順番に進めてください。<br>
-最大で<b>{self.max_turns}発話</b>（一人あたり<b>{self.max_turns//2}発話</b>）まで対話できます。<br>
-全てのタスクを達成できた場合は、 <b>{self.success_phrase}</b> とだけ入力することで、対話を終了できます。<br>
-また、対話の継続及びタスク達成が困難な場合は、<b>{self.failure_phrase}</b> と入力して対話を終了できます。<br>
-<br>
+<strong>インストラクション</strong>
+<ul>
+    <li>以下の<b>対話シナリオ</b>には、今回の対話におけるあなたの設定や目的（いつどこに観光する予定で、ボットに何を案内して欲しいか等）が書かれています。</li>
+    <li>このシナリオの順番に対話を進め、ボットから必要な情報を聞き出したり、条件に合った施設をボットに予約してもらったりすることで、<b>シナリオに書かれた目的をすべて達成してください</b>。</li>
+    <li>あなたは最大で<b>{self.max_turns//2}回</b>まで発話できます。</li>
+    <li>全ての目的を達成できたと思ったら、{self.max_turns//2}発話に達していなくても <b>{self.success_phrase}</b> と入力することで、対話を終了できます。</li>
+    <li>また、対話の継続及びタスク達成が困難だと思った場合も、<b>{self.failure_phrase}</b> と入力して対話を終了できます。</li>
+</ul>
+<strong>注意事項</strong>
+<ul>
+    <li>目的を達成できたかどうかは、本作業の承認及び報酬の支払いには影響しません。</li>
+    <li>本webページを閉じたり更新したりすると、対話がリセットされますのでご注意ください。</li>
+    <li>ボットからの応答に時間がかかることがあります（最大1分程度）ので、その際はしばらくお待ちください。</li>
+</ul>
 <strong>対話シナリオ</strong><br>
 """
         desc_list = ""
         for domain_name, domain_description in goal_description.items():
             desc_list += "<li>" + "<br>".join(domain_description) + "</li>"
         
-        instruction += "<ul>" + desc_list + "</ul>"
+        instruction += "<ol>" + desc_list + "</ol>"
         return instruction
 
     def create_new_session(self) -> Tuple[str, str]:
@@ -246,10 +282,19 @@ class JMultiWOZWorld:
             max_turns=self.max_turns,
             success_phrase=self.success_phrase,
             failure_phrase=self.failure_phrase,
+            eval_question_list=self.eval_question_list,
+            eval_answer_list=self.eval_answer_list,
         )
         instruction = self._make_instruction(goal_description=goal_description)
 
-        return session_id, instruction
+        html_format_args = {
+            "session_id": session_id,
+            "instruction": instruction,
+            "question_list": self.eval_question_list,
+            "answer_list": self.eval_answer_list,
+        }
+
+        return html_format_args
     
     def model_response(self, session_id: str, user_input: str) -> Tuple[str, str]:
         session = self.sessions[session_id]
@@ -258,7 +303,18 @@ class JMultiWOZWorld:
 
         return response_text, session_over
 
+    def save_eval_scores(self, session_id: str, eval_scores: List[str]) -> None:
+        if session_id not in self.sessions:
+            print(f"Session {session_id} does not exist.")
+            return
+        
+        self.sessions[session_id].eval_scores = eval_scores
+
     def export_session(self, session_id: str, sessions_dpath: str) -> None:
+        if session_id not in self.sessions:
+            print(f"Session {session_id} does not exist.")
+            return
+        
         os.makedirs(sessions_dpath, exist_ok=True)
 
         result = self.sessions[session_id].export_to_dict()
@@ -269,4 +325,13 @@ class JMultiWOZWorld:
         )
 
     def terminate_session(self, session_id: str) -> None:
+        if session_id not in self.sessions:
+            print(f"Session {session_id} does not exist.")
+            return
+        
         del self.sessions[session_id]
+
+    def export_unterminated_sessions(self, sessions_dpath: str) -> None:
+        for session_id in list(self.sessions.keys()):
+            self.export_session(session_id=session_id, sessions_dpath=sessions_dpath)
+            self.terminate_session(session_id=session_id)
