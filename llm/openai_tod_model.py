@@ -1,8 +1,10 @@
+import time
 from typing import List, Tuple, Union, Optional
 from copy import deepcopy
 import time
 import pickle
 import json
+from timeout_decorator import timeout, TimeoutError
 
 import openai
 
@@ -30,13 +32,29 @@ def call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
         
         except openai.error.RateLimitError as e:
             print(e)
-            print("Rate limit exceeded. Waiting for 30 seconds...")
-            time.sleep(30)
+            print("Rate limit exceeded. Waiting for 10 seconds...")
+            time.sleep(10)
             continue
 
-        except openai.error.OpenAIError as e:
+        except Exception as e:
             print(e)
             return ""
+
+
+def call_openai_api_with_timeout(model_name: str, prompt: str, max_tokens: int) -> str:
+    @timeout(60)
+    def _call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
+        return call_openai_api(model_name=model_name,
+                               prompt=prompt,
+                               max_tokens=max_tokens)
+    
+    try:
+        return _call_openai_api(model_name=model_name,
+                                prompt=prompt,
+                                max_tokens=max_tokens)
+    except TimeoutError:
+        print(f"TimeoutError: {prompt}")
+        return "応答に時間がかかりすぎています。お手数ですが、もう一度お願いします。"
 
 class OpenAITODModel(TODModelBase):
     def __init__(self, openai_model_name: str, max_context_turns: int, max_output_length: int, user_utterance_prefix: str, system_utterance_prefix: str,
@@ -54,9 +72,19 @@ class OpenAITODModel(TODModelBase):
         )
         self.max_context_turns = max_context_turns
         
-    def init_session(self):
-        self.previous_belief_state = deepcopy(default_belief_state)
-        self.previous_book_state = deepcopy(default_book_state)
+    def set_memory(self, memory: Optional[dict]) -> None:
+        if memory is None:
+            self.previous_belief_state = deepcopy(default_belief_state)
+            self.previous_book_state = deepcopy(default_book_state)
+        else:
+            self.previous_belief_state = deepcopy(memory["previous_belief_state"])
+            self.previous_book_state = deepcopy(memory["previous_book_state"])
+
+    def get_memory(self) -> dict:
+        return {
+            "previous_belief_state": deepcopy(self.previous_belief_state),
+            "previous_book_state": deepcopy(self.previous_book_state),
+        }
 
     def _prepare_fewshot_examples(self, context: List[Tuple[str, str]]) -> List[dict]:
         raise NotImplementedError
@@ -69,9 +97,9 @@ class OpenAITODModel(TODModelBase):
         general_domain_prompt = self.prompt_formater.make_state_prompt(domain="general",
                                                                        context=context,
                                                                        fewshot_examples=fewshot_examples)
-        general_domain_state_str = call_openai_api(model_name=self.model_name,
-                                                   prompt=general_domain_prompt,
-                                                   max_tokens=self.max_tokens)
+        general_domain_state_str = call_openai_api_with_timeout(model_name=self.model_name,
+                                                                prompt=general_domain_prompt,
+                                                                max_tokens=self.max_tokens)
         general_damain_state, _ = domain_state_str2dict(domain="general", domain_state_str=general_domain_state_str)
 
         active_domain = general_damain_state["active_domain"]
@@ -82,9 +110,9 @@ class OpenAITODModel(TODModelBase):
         active_domain_prompt = self.prompt_formater.make_state_prompt(domain=active_domain,
                                                                       context=context,
                                                                       fewshot_examples=fewshot_examples)
-        active_domain_state_str = call_openai_api(model_name=self.model_name,
-                                                  prompt=active_domain_prompt,
-                                                  max_tokens=self.max_tokens)
+        active_domain_state_str = call_openai_api_with_timeout(model_name=self.model_name,
+                                                               prompt=active_domain_prompt,
+                                                               max_tokens=self.max_tokens)
         active_domain_state, active_book_state = domain_state_str2dict(domain=active_domain,
                                                                        domain_state_str=active_domain_state_str)
 
@@ -129,9 +157,9 @@ class OpenAITODModel(TODModelBase):
             book_result=book_result,
             fewshot_examples=fewshot_examples,
         )
-        response = call_openai_api(model_name=self.model_name,
-                                   prompt=active_domain_prompt,
-                                   max_tokens=self.max_tokens)
+        response = call_openai_api_with_timeout(model_name=self.model_name,
+                                                prompt=active_domain_prompt,
+                                                max_tokens=self.max_tokens)
         
         if return_prompt:
             return response, active_domain_prompt

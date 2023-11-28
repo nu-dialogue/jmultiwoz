@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 
 from transformers import (
     AutoModelForSeq2SeqLM,
@@ -39,8 +39,11 @@ class T5TODModel(TODModelBase):
         self.max_candidate_entities = max_candidate_entities
         self.book_result_prefix = book_result_prefix
 
-    def init_session(self):
+    def set_memory(self, memory: Optional[dict]) -> None:
         pass
+
+    def get_memory(self) -> None:
+        return None
 
     def _generate(self, input_text: str, **kwargs) -> str:
         default_trunction_side = self.tokenizer.truncation_side

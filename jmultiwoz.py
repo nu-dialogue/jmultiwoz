@@ -20,9 +20,6 @@ class JMultiWOZDataset:
     @property
     def available_domains(self) -> List[str]:
         return list(self.ontology.keys())
-    
-    def get_dialogues(self, split: str) -> dict:
-        return self.dialogues[split]
 
     def list_dialogues(self, split: str) -> List[str]:
         return self.split_list[split]
