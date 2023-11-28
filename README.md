@@ -17,7 +17,7 @@ See the `README.md` in each model directory.
 - OpenAI LLM: [llm/README.md](llm/README.md)
 
 ## Evaluation
-1. Run inference to generate responses
+### 1. Run inference to generate responses
 > [!NOTE]
 > Exact command we used can be found in `inferece.sh`
 
@@ -33,7 +33,7 @@ python inference.py \
 ```
 Generated dialogues will be saved in `output/gpt4-fs-olen256/e2e.inference.json`.
 
-2. Evaluate the generated responses
+### 2. Evaluate the generated responses
 > [!NOTE]
 > Exact command we used can be found in `evaluate.sh`
 
