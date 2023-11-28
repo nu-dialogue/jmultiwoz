@@ -17,4 +17,6 @@ langchain==0.0.86
 faiss-cpu
 sentence-transformers
 fugashi[unidic-lite]
+spacy
+ja-ginza
 timeout-decorator
