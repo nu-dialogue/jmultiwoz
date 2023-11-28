@@ -179,7 +179,7 @@ def e2e_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, d
             "dialogue_name": dialogue_name,
             "turns": [],
         }
-        tod_model.init_session()
+        tod_model.set_memory(memory=None) # Initialize memory
         for context, true_turn in dataset.iter_dialogue_turns(split="test", dialogue_name=dialogue_name):
             assert true_turn["speaker"] == "SYSTEM", "Must be system turn."
 
@@ -241,7 +241,7 @@ def rg_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, da
             "dialogue_name": dialogue_name,
             "turns": [],
         }
-        tod_model.init_session()
+        tod_model.set_memory(memory=None) # Initialize memory
         for context, true_turn in dataset.iter_dialogue_turns(split="test", dialogue_name=dialogue_name):
             assert true_turn["speaker"] == "SYSTEM", "Must be system turn."
 
