@@ -69,11 +69,10 @@ server {
 ```
 
 ### 2. Run web server
-
 ```bash
 python server.py --tod_model_names gpt4-fs gpt3.5-fs t5-large
 ```
 
 ### 3. Open the web page in your browser
-    - For local access: http://localhost:8080/dialogue
-    - For remote access: http://your-server-ip/dialogue
+- For local access: http://localhost:8080/dialogue
+- For remote access: http://your-server-ip/dialogue
