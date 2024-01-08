@@ -1,12 +1,8 @@
 from typing import List, Tuple, Union, Optional
 
-from transformers import (
-    AutoModelForSeq2SeqLM,
-    AutoTokenizer,
-    AutoConfig,
-)
-
 from tod_models.tod_model_base import TODModelBase
+from tod_models.t5.t5_generation_utils import create_t5_generation_function
+
 from utils.data_utils import (
     context_list2str,
     state_dict2str,
@@ -16,15 +12,17 @@ from utils.data_utils import (
 )
 
 class T5TODModel(TODModelBase):
-    def __init__(self, model_name_or_path: str, device: Union[str, int], max_context_turns: int, max_input_length: str, max_output_length: str,
+    def __init__(self, model_name_or_path: str, device: Union[str, int], use_background_generation_server: bool,
+                 max_context_turns: int, max_input_length: str, max_output_length: str,
                  dst_task_prefix: str, rg_task_prefix: str, user_utterance_prefix: str, system_utterance_prefix: str,
                  state_prefix: str, db_result_prefix: str, max_candidate_entities: int, book_result_prefix: str):
         
-        self.device = device
-        config = AutoConfig.from_pretrained(model_name_or_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, use_fast=True)
-        self.t5_model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, config=config).to(self.device)
-        
+        self.generation_fn = create_t5_generation_function(
+            model_name_or_path=model_name_or_path,
+            device=device,
+            use_background_generation_server=use_background_generation_server,
+        )
+
         self.max_context_turns = max_context_turns
         self.max_input_length = max_input_length
         self.max_output_length = max_output_length
@@ -68,7 +66,12 @@ class T5TODModel(TODModelBase):
         )
 
         input_text = f"{self.dst_task_prefix} {context_str}"
-        state_str = self._generate(input_text, do_sample=False, top_p=1.0, num_beams=1)
+        state_str = self.generation_fn(
+            input_text=input_text,
+            max_input_length=self.max_input_length,
+            max_output_length=self.max_output_length,
+            do_sample=False, top_p=1.0, num_beams=1
+        )
         belief_state, book_state = state_str2dict(state_str)
         return belief_state, book_state
     
@@ -95,5 +98,11 @@ class T5TODModel(TODModelBase):
                       f"{self.state_prefix} {state_str} "
                       f"{self.db_result_prefix} {db_result_str} "
                       f"{self.book_result_prefix} {book_result_str}")
-        output_text = self._generate(input_text, do_sample=False, top_p=1.0, num_beams=1)
+        
+        output_text = self.generation_fn(
+            input_text=input_text,
+            max_input_length=self.max_input_length,
+            max_output_length=self.max_output_length,
+            do_sample=False, top_p=1.0, num_beams=1
+        )
         return output_text

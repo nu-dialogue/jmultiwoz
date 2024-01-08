@@ -119,6 +119,7 @@ def load_tod_model(tod_model_args, device="cuda"):
         tod_model = T5TODModel(
             model_name_or_path=tod_model_args.model_name_or_path,
             device=device,
+            use_background_generation_server=False,
             max_context_turns=0, # Use all context turns on T5 model
             max_input_length=tod_model_args.max_input_length,
             max_output_length=tod_model_args.max_output_length,
