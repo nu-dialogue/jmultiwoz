@@ -2,8 +2,9 @@ import os
 import json
 import datetime
 import argparse
+import traceback
 
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from utils.human_eval_ui_2cols import INTERFACE_HTML
@@ -92,7 +93,7 @@ def tod_model_factory(tod_model_name: str):
     return tod_model
 
 
-def server(args):
+def run_server(args):
     # Save args
     os.makedirs(args.output_dpath) # Do not overwrite existing directory.
 
@@ -187,7 +188,7 @@ def server(args):
                     model_response = {"text": model_utterance, "sessionOver": session_over}
 
                 except Exception as e:
-                    print("error", e, flush=True)
+                    print("error", traceback.format_exc(), flush=True)
                     model_response = {"text": f"error Message: {e}", "session_over": False}
                     # raise e
 
@@ -231,13 +232,17 @@ def server(args):
                 json_str = json.dumps(model_response)
                 self.wfile.write(bytes(json_str, 'utf-8'))
 
+    if args.threading_httpd:
+        print("*** Use ThreadingHTTPServer ***", flush=True)
+        http_server_class = ThreadingHTTPServer
+    else:
+        print("*** Use HTTPServer ***", flush=True)
+        http_server_class = HTTPServer
 
     print("Start", flush=True)
-    address = ('localhost', 8080)
-
     try:
         MyHTTPRequestHandler.protocol_version = 'HTTP/1.0'
-        with HTTPServer(address, MyHTTPRequestHandler) as server:
+        with http_server_class(('localhost', 8080), MyHTTPRequestHandler) as server:
             server.serve_forever()
     except KeyboardInterrupt:
         jmultiwoz_world.export_unterminated_sessions(
@@ -255,6 +260,8 @@ if __name__ == "__main__":
                         help="Path to JMultiWOZ dataset.")
     parser.add_argument("--max_turns", type=int, default=40,
                         help="Max turn per dialogue session.")
+    parser.add_argument("--threading_httpd", action="store_true",
+                        help="Use ThreadingHTTPServer instead of HTTPServer.")
     args = parser.parse_args()
 
-    server(args)
+    run_server(args)

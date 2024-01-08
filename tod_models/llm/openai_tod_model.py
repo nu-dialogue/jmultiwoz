@@ -30,6 +30,7 @@ def call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
                 ],
                 max_tokens=max_tokens,
                 temperature=0,
+                # request_timeout=60, # this may don't work
             )
             return completion.choices[0].message["content"].strip()
         
@@ -45,7 +46,7 @@ def call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
 
 
 def call_openai_api_with_timeout(model_name: str, prompt: str, max_tokens: int) -> str:
-    @timeout(60)
+    @timeout(60, use_signals=False)
     def _call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
         return call_openai_api(model_name=model_name,
                                prompt=prompt,
