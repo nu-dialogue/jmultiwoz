@@ -5,14 +5,95 @@ import argparse
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
-# from interface import INTERFACE_HTML
-from interface_2cols import INTERFACE_HTML
-from world import TOD_MODEL_KWARGS, JMultiWOZWorld
 
-STYLE_SHEET = "https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.4/css/bulma.css"
-FONT_AWESOME = "https://use.fontawesome.com/releases/v5.3.1/js/all.js"
+from utils.human_eval_ui_2cols import INTERFACE_HTML
+from utils.human_eval_worlds import JMultiWOZWorld
+
+TOD_MODEL_KWARGS = {
+    "t5-base": {
+        "model_name_or_path": "tod_models/t5/output/t5-base-bs32-ep5-olen256/checkpoints",
+        "device": "cuda:0",
+        "max_context_turns": 0,
+        "max_input_length": 512,
+        "max_output_length": 256,
+        "dst_task_prefix": "対話から信念状態を推定:",
+        "rg_task_prefix": "対話から応答を生成:",
+        "user_utterance_prefix": "<顧客>",
+        "system_utterance_prefix": "<店員>",
+        "state_prefix": "<信念状態>",
+        "db_result_prefix": "<検索結果>",
+        "max_candidate_entities": 3,
+        "book_result_prefix": "<予約結果>",
+    },
+    "t5-large": {
+        "model_name_or_path": "tod_models/t5/output/t5-large-bs32-ep5-olen256/checkpoints",
+        "device": "cuda:0",
+        "max_context_turns": 0,
+        "max_input_length": 512,
+        "max_output_length": 256,
+        "dst_task_prefix": "対話から信念状態を推定:",
+        "rg_task_prefix": "対話から応答を生成:",
+        "user_utterance_prefix": "<顧客>",
+        "system_utterance_prefix": "<店員>",
+        "state_prefix": "<信念状態>",
+        "db_result_prefix": "<検索結果>",
+        "max_candidate_entities": 3,
+        "book_result_prefix": "<予約結果>",
+    },
+    "gpt3.5-fs": {
+        "openai_model_name": "gpt-3.5-turbo",
+        "max_context_turns": 5, # Use 5 context turns on OpenAI model
+        "max_output_length": 256,
+        "user_utterance_prefix": "<顧客>",
+        "system_utterance_prefix": "<店員>",
+        "state_prefix": "<信念状態>",
+        "db_result_prefix": "<検索結果>",
+        "max_candidate_entities": 3,
+        "book_result_prefix": "<予約結果>",
+        "faiss_db_fprefix": "tod_models/llm/output/faiss_db/hf-sup-simcse-ja-large-ctx2-d20",
+        "num_fewshot_examples": 2,
+    },
+    "gpt4-fs": {
+        "openai_model_name": "gpt-4",
+        "max_context_turns": 5, # Use 5 context turns on OpenAI model
+        "max_output_length": 256,
+        "user_utterance_prefix": "<顧客>",
+        "system_utterance_prefix": "<店員>",
+        "state_prefix": "<信念状態>",
+        "db_result_prefix": "<検索結果>",
+        "max_candidate_entities": 3,
+        "book_result_prefix": "<予約結果>",
+        "faiss_db_fprefix": "tod_models/llm/output/faiss_db/hf-sup-simcse-ja-large-ctx2-d20",
+        "num_fewshot_examples": 2,
+    }
+}
+
+def tod_model_factory(tod_model_name: str):
+    print(f"Loading {tod_model_name} ...")
+    if tod_model_name == "t5-base":
+        from tod_models.t5 import T5TODModel
+        tod_model = T5TODModel(**TOD_MODEL_KWARGS["t5-base"])
+
+    elif tod_model_name == "t5-large":
+        from tod_models.t5 import T5TODModel
+        tod_model = T5TODModel(**TOD_MODEL_KWARGS["t5-large"])
+    
+    elif tod_model_name == "gpt3.5-fs":
+        from tod_models.llm import OpenAIFewShotTODModel
+        tod_model = OpenAIFewShotTODModel(**TOD_MODEL_KWARGS["gpt3.5-fs"])
+    
+    elif tod_model_name == "gpt4-fs":
+        from tod_models.llm import OpenAIFewShotTODModel
+        tod_model = OpenAIFewShotTODModel(**TOD_MODEL_KWARGS["gpt4-fs"])
+    
+    else:
+        raise ValueError(f"Unknown tod_model_name: {tod_model_name}")
+    
+    return tod_model
+
 
 def server(args):
+    # Save args
     os.makedirs(args.output_dpath) # Do not overwrite existing directory.
 
     json.dump(
@@ -24,8 +105,14 @@ def server(args):
         indent=4, ensure_ascii=False
     )
     
+    # Load TOD models
+    tod_models = {}
+    for tod_model_name in args.tod_model_names:
+        tod_models[tod_model_name] = tod_model_factory(tod_model_name)
+
+    # Create world for human evaluation
     jmultiwoz_world = JMultiWOZWorld(
-        tod_model_names=args.tod_model_names,
+        tod_models=tod_models,
         dataset_dpath=args.jmultiwoz_dataset_dpath,
         max_turns=args.max_turns,
     )
@@ -64,8 +151,6 @@ def server(args):
                 elif parsed_path.path == '/dialogue':
                     html_format_args = jmultiwoz_world.create_new_session()
                     content = INTERFACE_HTML.format(
-                        stylesheet_href=STYLE_SHEET,
-                        font_src=FONT_AWESOME,
                         instruction=html_format_args["instruction"],
                         session_id=html_format_args["session_id"],
                         question_list=html_format_args["question_list"],

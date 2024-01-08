@@ -1,3 +1,4 @@
+import os
 import time
 from typing import List, Tuple, Union, Optional
 from copy import deepcopy
@@ -8,14 +9,16 @@ from timeout_decorator import timeout, TimeoutError
 
 import openai
 
-from tod_model_base import TODModelBase
-from llm.prompts import PromptFormater
-from data_utils import (
+from tod_models.tod_model_base import TODModelBase
+from tod_models.llm.prompts import PromptFormater
+from utils.data_utils import (
     default_belief_state,
     default_book_state,
     context_list2str,
     domain_state_str2dict,
 )
+
+openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 def call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
     while True:

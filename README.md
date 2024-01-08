@@ -11,15 +11,15 @@ cd dataset
 unzip JMultiWOZ_1.0.zip
 ```
 
-## TODModel Preparation
+## Dialogue Model Preparation
 See the `README.md` in each model directory.
-- T5: [t5/README.md](t5/README.md)
-- OpenAI LLM: [llm/README.md](llm/README.md)
+- T5: [tod_models/t5/README.md](tod_models/t5/README.md)
+- OpenAI LLM: [tod_models/llm/README.md](tod_models/llm/README.md)
 
 ## Evaluation
 ### 1. Run inference to generate responses
 > [!NOTE]
-> Exact command we used can be found in `inferece.sh`
+> Exact command we used can be found in `run_inferece.sh`
 
 ```bash
 python inference.py \
@@ -35,7 +35,7 @@ Generated dialogues will be saved in `output/gpt4-fs-olen256/e2e.inference.json`
 
 ### 2. Evaluate the generated responses
 > [!NOTE]
-> Exact command we used can be found in `evaluate.sh`
+> Exact command we used can be found in `run_evaluate.sh`
 
 ```bash
 python evaluate.py \
@@ -70,7 +70,7 @@ server {
 
 ### 2. Run web server
 ```bash
-python server.py --tod_model_names gpt4-fs gpt3.5-fs t5-large
+python human_eval.py --tod_model_names gpt4-fs gpt3.5-fs t5-large
 ```
 
 ### 3. Open the web page in your browser

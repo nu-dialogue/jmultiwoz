@@ -1,28 +1,22 @@
-#!/bin/bash
-#PJM -L rscgrp=cx-small
-#PJM -L node=4
-#PJM -L elapse=48:00:00
-#PJM -j
-#PJM -S
-#PJM -o train-base-bs32-ep5.log
+# T5-based Task-oriented Dialogue Modeling
+## Prepare Dataset
 
-module load gcc/10.3.0
-module load cuda/11.6.2
-module load cudnn/8.3.3
-module load openmpi_cuda/4.1.2
-module load nccl/2.12.7
+```bash
+python preprocess_dataset.py \
+    --dataset_dpath "../../dataset/JMultiWOZ_1.0" \
+    --preprocessed_dpath "processed_data"
+```
 
-. ../.venv/bin/activate
+## Training
+> [!NOTE]
+> Exact command we used can be found in `train.sh`
 
-export CUDA_VISIBLE_DEVICES="0,1,2,3"
+You can train the model with the following command:
 
+```bash
 OUTPUT_DIR="output/t5-base-bs32-ep5-len256"
-# torchrun --nproc_per_node=4 --nnodes 1 train.py \
-mpirun \
-    -n 16 \
-    -machinefile $PJM_O_NODEINF \
-    -display-devel-map \
-    -map-by ppr:2:socket \
+
+torchrun --nproc_per_node=4 --nnodes=4 \
     python train.py \
         --do_train \
         --do_eval \
@@ -41,3 +35,6 @@ mpirun \
         --eval_steps "400" \
         --save_steps "400" \
         --logging_steps "10"
+
+```
+This will output the trained model in `output/t5-base-bs32-ep5-len256/checkpoints`.

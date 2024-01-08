@@ -1,12 +1,10 @@
-
 import os
-from dataclasses import dataclass, field
-from typing import Optional
-from tqdm import tqdm
-import pandas as pd
-import numpy as np
 import json
-from glob import glob
+import numpy as np
+from tqdm import tqdm
+from typing import Optional
+from dataclasses import dataclass, field
+import fcntl
 
 import multiprocessing as standard_mp
 import torch.multiprocessing as torch_mp
@@ -14,7 +12,7 @@ import torch.multiprocessing as torch_mp
 from transformers import (
     HfArgumentParser
 )
-from jmultiwoz import JMultiWOZDataset, JMultiWOZDatabase
+from utils.jmultiwoz import JMultiWOZDataset, JMultiWOZDatabase
 
 @dataclass
 class TODModelArguments:
@@ -80,7 +78,7 @@ class TODModelArguments:
     )
 
     faiss_db_fprefix: Optional[str] = field(
-        default="llm/output/faiss_db/hf-sup-simcse-ja-large-ctx2-d20",
+        default="tod_models/llm/output/faiss_db/hf-sup-simcse-ja-large-ctx2-d20",
         metadata={"help": "Path to the faiss db file. Only used for openai-fs model."},
     )
     num_fewshot_examples: Optional[int] = field(
@@ -117,7 +115,7 @@ class InferenceArguments:
 
 def load_tod_model(tod_model_args, device="cuda"):
     if tod_model_args.tod_model_type == "t5":
-        from t5.t5_tod_model import T5TODModel
+        from tod_models.t5 import T5TODModel
         tod_model = T5TODModel(
             model_name_or_path=tod_model_args.model_name_or_path,
             device=device,
@@ -134,7 +132,7 @@ def load_tod_model(tod_model_args, device="cuda"):
             book_result_prefix=tod_model_args.book_result_prefix,
         )
     elif tod_model_args.tod_model_type == "openai-zs":
-        from llm.openai_tod_model import OpenAIZeroShotTODModel
+        from tod_models.llm import OpenAIZeroShotTODModel
         tod_model = OpenAIZeroShotTODModel(
             openai_model_name=tod_model_args.model_name_or_path,
             max_context_turns=5, # Use 5 context turns on OpenAI model
@@ -147,7 +145,7 @@ def load_tod_model(tod_model_args, device="cuda"):
             book_result_prefix=tod_model_args.book_result_prefix,
         )
     elif tod_model_args.tod_model_type == "openai-fs":
-        from llm.openai_tod_model import OpenAIFewShotTODModel
+        from tod_models.llm import OpenAIFewShotTODModel
         tod_model = OpenAIFewShotTODModel(
             openai_model_name=tod_model_args.model_name_or_path,
             max_context_turns=5, # Use 5 context turns on OpenAI model
@@ -222,10 +220,13 @@ def e2e_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, d
                 },
                 "utterance": response,
             })
+
         # Save intermediate results temporarily
         jsonline = json.dumps(results[dialogue_name], ensure_ascii=False)
-        with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.{rank}.jsonl"), "a") as f:
+        with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.jsonl"), "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             f.write(jsonline + "\n")
+            fcntl.flock(f, fcntl.LOCK_UN)
 
     results_by_rank[rank] = results
     # return results
@@ -261,8 +262,10 @@ def rg_inference(rank, tod_model_args, infer_args, dialogue_names_by_process, da
             })
         # Save intermediate results temporarily
         jsonline = json.dumps(results[dialogue_name], ensure_ascii=False)
-        with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.{rank}.jsonl"), "a") as f:
+        with open(os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.jsonl"), "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             f.write(jsonline + "\n")
+            fcntl.flock(f, fcntl.LOCK_UN)
 
     results_by_rank[rank] = results
     # return results
@@ -286,19 +289,25 @@ def main():
     if infer_args.num_dialogues is not None:
         dialogue_names = dialogue_names[:infer_args.num_dialogues]
 
-    # Load temporary results
+    # Load intermediate results
     results = {}
+    tmp_result_fpath = os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.jsonl")
     if infer_args.resume_last_run:
-        for tmp_result_fpath in glob(
-            os.path.join(infer_args.output_dir, f"{infer_args.task_name}.inference.tmp.*.jsonl")
-        ):
+        if os.path.exists(tmp_result_fpath):
+            print(f"Loading temporary results from last run.")
             for line in open(tmp_result_fpath):
                 tmp_result = json.loads(line.strip())
                 results[tmp_result["dialogue_name"]] = tmp_result
-        print(f"Loaded {len(results)} temporary results.")
-        dialogue_names = [dial for dial in dialogue_names if dial not in results]
+            dialogue_names = [dial for dial in dialogue_names if dial not in results]
+        else:
+            print("No temporary results found.")
+    else:
+        print("Not resuming last run.")
+        if os.path.exists(tmp_result_fpath):
+            print("Removing temporary results if exist.")
+            os.remove(tmp_result_fpath)
 
-    print(f"Number of dialogues: {len(dialogue_names)}")
+    print(f"Toal number of dialogues to process: {len(dialogue_names)}")
     dialogue_names_by_process = {
         rank : names.tolist() for rank, names in enumerate(
             np.array_split(dialogue_names, infer_args.world_size)

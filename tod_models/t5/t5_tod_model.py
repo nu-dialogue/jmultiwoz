@@ -6,9 +6,8 @@ from transformers import (
     AutoConfig,
 )
 
-from tod_model_base import TODModelBase
-
-from data_utils import (
+from tod_models.tod_model_base import TODModelBase
+from utils.data_utils import (
     context_list2str,
     state_dict2str,
     state_str2dict,

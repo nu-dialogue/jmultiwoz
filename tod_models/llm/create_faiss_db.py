@@ -9,8 +9,12 @@ from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
 from langchain.docstore.document import Document
 
-from jmultiwoz import JMultiWOZDataset
-from data_utils import (
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+
+from utils.jmultiwoz import JMultiWOZDataset
+from utils.data_utils import (
     context_list2str,
 )
 

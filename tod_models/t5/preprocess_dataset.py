@@ -4,9 +4,12 @@ import json
 import argparse
 from tqdm import tqdm
 
-from jmultiwoz import JMultiWOZDataset
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
-from data_utils import (
+from utils.jmultiwoz import JMultiWOZDataset
+from utils.data_utils import (
     context_list2str,
     state_dict2str,
     db_result_dict2str,

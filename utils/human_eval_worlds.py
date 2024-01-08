@@ -1,92 +1,29 @@
 import os
-import openai
 import random, string
 import json
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from copy import deepcopy
 
-from jmultiwoz import JMultiWOZDataset, JMultiWOZDatabase
-
-from tod_model_base import TODModelBase
-from t5.t5_tod_model import T5TODModel
-from llm.openai_tod_model import OpenAIFewShotTODModel
-
-openai.api_key = os.environ.get('OPENAI_API_KEY')
-
-TOD_MODEL_CLASS = {
-    "t5-base": T5TODModel,
-    "t5-large": T5TODModel,
-    "gpt3.5-fs": OpenAIFewShotTODModel,
-    "gpt4-fs": OpenAIFewShotTODModel,
-}
-
-TOD_MODEL_KWARGS = {
-    "t5-base": {
-        "model_name_or_path": "t5/output/t5-base-bs32-ep5-olen256/checkpoints",
-        "device": "cuda:0",
-        "max_context_turns": 0,
-        "max_input_length": 512,
-        "max_output_length": 256,
-        "dst_task_prefix": "対話から信念状態を推定:",
-        "rg_task_prefix": "対話から応答を生成:",
-        "user_utterance_prefix": "<顧客>",
-        "system_utterance_prefix": "<店員>",
-        "state_prefix": "<信念状態>",
-        "db_result_prefix": "<検索結果>",
-        "max_candidate_entities": 3,
-        "book_result_prefix": "<予約結果>",
-    },
-    "t5-large": {
-        "model_name_or_path": "t5/output/t5-large-bs32-ep5-olen256/checkpoints",
-        "device": "cuda:0",
-        "max_context_turns": 0,
-        "max_input_length": 512,
-        "max_output_length": 256,
-        "dst_task_prefix": "対話から信念状態を推定:",
-        "rg_task_prefix": "対話から応答を生成:",
-        "user_utterance_prefix": "<顧客>",
-        "system_utterance_prefix": "<店員>",
-        "state_prefix": "<信念状態>",
-        "db_result_prefix": "<検索結果>",
-        "max_candidate_entities": 3,
-        "book_result_prefix": "<予約結果>",
-    },
-    "gpt3.5-fs": {
-        "openai_model_name": "gpt-3.5-turbo",
-        "max_context_turns": 5, # Use 5 context turns on OpenAI model
-        "max_output_length": 256,
-        "user_utterance_prefix": "<顧客>",
-        "system_utterance_prefix": "<店員>",
-        "state_prefix": "<信念状態>",
-        "db_result_prefix": "<検索結果>",
-        "max_candidate_entities": 3,
-        "book_result_prefix": "<予約結果>",
-        "faiss_db_fprefix": "llm/output/faiss_db/hf-sup-simcse-ja-large-ctx2-d20",
-        "num_fewshot_examples": 2,
-    },
-    "gpt4-fs": {
-        "openai_model_name": "gpt-4",
-        "max_context_turns": 5, # Use 5 context turns on OpenAI model
-        "max_output_length": 256,
-        "user_utterance_prefix": "<顧客>",
-        "system_utterance_prefix": "<店員>",
-        "state_prefix": "<信念状態>",
-        "db_result_prefix": "<検索結果>",
-        "max_candidate_entities": 3,
-        "book_result_prefix": "<予約結果>",
-        "faiss_db_fprefix": "llm/output/faiss_db/hf-sup-simcse-ja-large-ctx2-d20",
-        "num_fewshot_examples": 2,
-    }
-}
+from utils.jmultiwoz import JMultiWOZDataset, JMultiWOZDatabase
+from tod_models.tod_model_base import TODModelBase
 
 class DialogueGoalSampler:
-    def __init__(self, dataset_dpath: str, split: str = "test"):
+    def __init__(self, dataset_dpath: str):
         self.dataset = JMultiWOZDataset(dataset_dpath=dataset_dpath)
-        self.dialogue_names = self.dataset.list_dialogues(split=split)
 
-    def sample(self) -> Tuple[str, dict, str]:
-        dialogue_name = random.choice(self.dialogue_names)
-        dialogue = self.dataset.get_dialogue(split="test", dialogue_name=dialogue_name)
+    def sample(self, split: str) -> Tuple[str, dict, str]:
+        """
+        Sample a dialogue goal from the dataset.
+        Args:
+            split: "train", "val", or "test"
+        Returns:
+            dialogue_name: Name of the sampled dialogue
+            goal: Dialogue goal
+            goal_description: Dialogue goal description
+        """
+        dialogue_names = self.dataset.list_dialogues(split=split)
+        dialogue_name = random.choice(dialogue_names)
+        dialogue = self.dataset.get_dialogue(split=split, dialogue_name=dialogue_name)
         return dialogue_name, dialogue["goal"], dialogue["goal_description"]
         
 
@@ -214,16 +151,11 @@ class DialogueSession:
         })
 
 class JMultiWOZWorld:
-    def __init__(self, tod_model_names: List[str], dataset_dpath: str, max_turns: int):
-        self.tod_models = {}
-        for tod_model_name in tod_model_names:
-            print(f"Loading {tod_model_name} ...")
-            tod_model_class = TOD_MODEL_CLASS[tod_model_name]
-            tod_model_kwargs = TOD_MODEL_KWARGS[tod_model_name]
-            self.tod_models[tod_model_name] = tod_model_class(**tod_model_kwargs)
+    def __init__(self, tod_models: Dict[str, TODModelBase], dataset_dpath: str, max_turns: int):
+        self.tod_models = tod_models
         
         self.database = JMultiWOZDatabase(db_dpath=os.path.join(dataset_dpath, "database"))
-        self.goal_sampler = DialogueGoalSampler(dataset_dpath=dataset_dpath, split="test")
+        self.goal_sampler = DialogueGoalSampler(dataset_dpath=dataset_dpath)
 
         self.sessions = {}
         
@@ -268,7 +200,7 @@ class JMultiWOZWorld:
     def create_new_session(self) -> Tuple[str, str]:
         session_id = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
 
-        dialogue_name, goal, goal_description = self.goal_sampler.sample()
+        dialogue_name, goal, goal_description = self.goal_sampler.sample(split="test")
         tod_model_name = random.choice(list(self.tod_models))
 
         self.sessions[session_id] = DialogueSession(
@@ -285,6 +217,8 @@ class JMultiWOZWorld:
             eval_question_list=self.eval_question_list,
             eval_answer_list=self.eval_answer_list,
         )
+        print(f"Created a session (sess={session_id}, dial={dialogue_name}, model={tod_model_name})")
+
         instruction = self._make_instruction(goal_description=goal_description)
 
         html_format_args = {

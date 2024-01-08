@@ -23,6 +23,9 @@ class JMultiWOZDataset:
 
     def list_dialogues(self, split: str) -> List[str]:
         return self.split_list[split]
+    
+    def get_dialogues(self, split: str) -> dict:
+        return self.dialogues[split]
 
     def get_dialogue(self, split: str, dialogue_name: str) -> dict:
         return self.dialogues[split][dialogue_name]

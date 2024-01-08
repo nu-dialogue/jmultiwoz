@@ -1,6 +1,6 @@
 INTERFACE_HTML = """
 <html>
-    <link rel="stylesheet" href={stylesheet_href} />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.4/css/bulma.css" />
     <style>
     .balloon1-left {{
       position: relative;
@@ -62,80 +62,49 @@ INTERFACE_HTML = """
     align-items: flex-end;
     }}
 
-    .container {{
-        display: flex;
-        height: calc(100vh - 20px); /* Full viewport height */
-        max-width: 1600px; /* Set a max width so it doesn't stretch too wide on larger screens */
-        margin-bottom: 20px; /* Add 20px margin to the bottom */
-        background-color: #F5F5F5;
-    }}
-
-    /* Left section styles */
-    .instructions {{
-        width: 50%; /* Adjust this width as needed */
-        border-right: 1px solid #ddd; /* Optional border to separate the two sections */
-        padding: 20px; /* Added padding for better spacing and readability */
-        overflow: auto; /* Added scroll to better handle multiple messages */
-    }}
-
-    /* Right section styles */
-    .chat {{
-        width: 50%; /* Adjust this width as needed */
-        padding: 20px; /* Added padding for better spacing and readability */
-    }}
-
-    /* Chat messages */
-    #parent {{
-        overflow: auto; /* Added scroll to better handle multiple messages */
-        height: calc(100% - 100px); /* Adjust this height as needed */
-        padding-top: 1em;
-        padding-bottom: 0;
-    }}
-
     </style>
-    <script defer src={font_src}></script>
+    <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
     <head>
         <title>対話ページ</title>
     </head>
     <body>
-        <div class="container">
-            <!-- Instructions Section (Left Side) -->
-            <div class="instructions">
-                <article class="media">
+        <div class="columns" style="height: 100%">
+            <div class="column is-three-fifths is-offset-one-fifth">
+            <section class="hero is-info is-large has-background-light has-text-grey-dark" style="height: 100%">
+                <div id="parent" class="hero-body" style="overflow: auto; height: calc(100% - 76px); padding-top: 1em; padding-bottom: 0;">
+                    <article class="media">
                     <div class="media-content">
                         <div class="content">
-                            <p>{instruction}</p>
+                        <p>
+                            <strong>インストラクション</strong>
+                            <br>
+                            {instruction}
+                        </p>
                         </div>
                     </div>
-                </article>
-            </div>
-            <!-- Chat Section (Right Side) -->
-            <div class="chat">
-                <div id="parent">
-                    <!-- Chat messages will go here -->
+                    </article>
                 </div>
-                <div class="hero-foot column is-four-fifths is-offset-one-fifth" style="height: 80px">
-                    <form id="interact">
-                        <div class="field is-grouped">
-                            <p class="control is-expanded">
-                                <input class="input" type="text" id="userIn" placeholder="Input your message" required>
-                            </p>
-                            <p class="control">
-                                <button id="respond" type="submit" class="button has-text-white-ter has-background-grey-dark">
-                                    Send
-                                </button>
-                            </p>
-                        </div>
-                    </form>
+                <div class="hero-foot column is-three-fifths is-offset-one-fifth" style="height: 76px">
+                <form id = "interact">
+                    <div class="field is-grouped">
+                        <p class="control is-expanded">
+                        <input class="input" type="text" id="userIn" placeholder="メッセージを入力してください" required autocomplete="off">
+                        </p>
+                        <p class="control">
+                        <button id="respond" type="submit" class="button has-text-white-ter has-background-grey-dark">
+                            送信
+                        </button>
+                        </p>
+                    </div>
+                </form>
                 </div>
+            </section>
             </div>
         </div>
         <script>
             var sessionId = "{session_id}";
             var outfile = sessionId + ".csv";
             var turn = 0;
-            var questionList = {question_list};
-            var answerList = {answer_list};
             var sessionOver = false;
             var botResponseDelay = 3000;
             // document.getElementById("turn").innerHTML = maxTurns;
@@ -218,7 +187,7 @@ INTERFACE_HTML = """
             function exportCSV() {{
                 var evalValues = [];
                 var messageArea = document.getElementById('messageArea');
-                for (var i = 0; i < questionList.length; i++) {{
+                for (var i = 0; i < 3; i++) {{
                     var name = 'q' + String(i+1);
                     var elements = document.getElementsByName(name);
                     for (var j = 0; j < elements.length; j++) {{
@@ -227,7 +196,7 @@ INTERFACE_HTML = """
                         }}
                     }}
                 }}
-                if (evalValues.length != questionList.length) {{
+                if (evalValues.length != 3) {{
                     alert("全ての設問に回答してください");
                     return;
                 }}
@@ -254,25 +223,10 @@ INTERFACE_HTML = """
                 window.URL.revokeObjectURL(url);
                 link.parentNode.removeChild(link);
 
-                sendEvalResult(evalValues);
-
                 // setTimeout(() => {{
                 // peer.destroy();
                 // window.location.href = '/finish';
                 // }}, 3000);
-            }}
-
-            function sendEvalResult(evalValues) {{
-                var send_info = {{"evalValues": evalValues, "sessionId": sessionId}};
-                fetch('/evaluate', {{
-                    headers: {{
-                        'Content-Type': 'application/json'
-                    }},
-                    method: 'POST',
-                    body: JSON.stringify(send_info)
-                }}).then(response=>response.json()).then(data=>{{
-                    console.log(data);
-                }})
             }}
 
             var parDiv = document.getElementById("parent");
@@ -352,12 +306,22 @@ INTERFACE_HTML = """
                     body: JSON.stringify(send_info)
                 }}).then(response=>response.json()).then(data=>{{
                     // myContext.push({{"spk": "[SPK2]", "utt": send_info["utt"]}});
-                    var botResponse = data.text;
+                    var botResponse = processBotUtterance(data.text);
                     sessionOver = data.sessionOver;
                     // botResponseDelay = Math.min(Math.max(10, botResponse.length), 30) * 1000;
                     botResponseDelay = 0;
                     setTimeout(addBotUtterance, botResponseDelay, botResponse);
                 }})
+            }}
+
+            function processBotUtterance(text) {{
+              var utt = text.replace("，", "、");
+              utt = utt.replace(",", "、");
+              utt = utt.replace("．", "。");
+              utt = utt.replace(".", "。");
+              utt = utt.replace("!", "！");
+              utt = utt.replace("?", "？");
+              return utt;
             }}
 
             function finishDialogue(parDiv, delay=0) {{
@@ -372,8 +336,9 @@ INTERFACE_HTML = """
 
             function createEvalForm() {{
                 var parDiv = document.getElementById("parent");
-                var prevScrollHeight = parDiv.scrollHeight;
-                for (var j=0; j<questionList.length; j++) {{
+                var questionList = ["1: 対話を通して、ボットの対話の流れはスムーズだった", "2: 対話を通して、ボットは十分な情報を提示していた", "3: 対話を通して、自分は対話に満足した"]
+                var answerList = ["1. 同意しない", "2. やや同意しない", "3. どちらでもない", "4. やや同意する", "5. 同意する"]
+                for (var j=0; j<3; j++) {{
                     var article = document.createElement("article");
                     article.className = "media";
                     var media = document.createElement("div");
@@ -383,7 +348,7 @@ INTERFACE_HTML = """
                     var q = document.createElement("p");
                     q.innerHTML = `<strong>${{questionList[j]}}</strong>`
                     content.appendChild(q);
-                    for (var i=0; i<answerList.length; i++) {{
+                    for (var i=0; i<5; i++) {{
                         var radio = document.createElement("label");
                         radio.style.display = 'block';
                         radio.style.padding = '5px';
@@ -395,7 +360,7 @@ INTERFACE_HTML = """
                     parDiv.append(article);
                 }}
                 parDiv.append(createChatRow("System", "全ての設問に回答したら、下の「評価結果をダウンロード」ボタンをクリックしてください。"));
-                parDiv.scrollTo(0, prevScrollHeight);
+                parDiv.scrollTo(0, parDiv.scrollHeight);
             }}
 
             document.getElementById("interact").addEventListener("reset", function(event){{
