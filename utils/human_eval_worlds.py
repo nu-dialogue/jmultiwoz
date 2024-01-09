@@ -1,7 +1,7 @@
 import os
 import random, string
 import json
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from copy import deepcopy
 
 from utils.jmultiwoz import JMultiWOZDataset, JMultiWOZDatabase
@@ -10,6 +10,9 @@ from tod_models.tod_model_base import TODModelBase
 class DialogueGoalSampler:
     def __init__(self, dataset_dpath: str):
         self.dataset = JMultiWOZDataset(dataset_dpath=dataset_dpath)
+
+    def list_dialogues(self, split: str) -> List[str]:
+        return self.dataset.list_dialogues(split=split)
 
     def sample(self, split: str) -> Tuple[str, dict, str]:
         """
@@ -26,6 +29,19 @@ class DialogueGoalSampler:
         dialogue = self.dataset.get_dialogue(split=split, dialogue_name=dialogue_name)
         return dialogue_name, dialogue["goal"], dialogue["goal_description"]
         
+    def select(self, split: str, dialogue_name: str) -> Tuple[str, dict, str]:
+        """
+        Select a dialogue goal from the dataset.
+        Args:
+            split: "train", "val", or "test"
+            dialogue_name: Name of the dialogue to be selected
+        Returns:
+            dialogue_name: Name of the selected dialogue
+            goal: Dialogue goal
+            goal_description: Dialogue goal description
+        """
+        dialogue = self.dataset.get_dialogue(split=split, dialogue_name=dialogue_name)
+        return dialogue_name, dialogue["goal"], dialogue["goal_description"]
 
 class DialogueSession:
     def __init__(self, session_id: str, dialogue_name: str, goal: dict, goal_description: str,
@@ -197,11 +213,25 @@ class JMultiWOZWorld:
         instruction += "<ol>" + desc_list + "</ol>"
         return instruction
 
-    def create_new_session(self) -> Tuple[str, str]:
+    def create_new_session(self, tod_model_name: Optional[str] = None, dialogue_name: Optional[str] = None) -> Dict[str, str]:
+        # set session id
         session_id = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
 
-        dialogue_name, goal, goal_description = self.goal_sampler.sample(split="test")
-        tod_model_name = random.choice(list(self.tod_models))
+        # set tod model
+        if tod_model_name and tod_model_name not in self.tod_models:
+            print(f"Model {tod_model_name} does not exist.")
+            tod_model_name = None
+        if tod_model_name is None:
+            tod_model_name = random.choice(list(self.tod_models))
+
+        # set dialogue goal
+        if dialogue_name and dialogue_name not in self.goal_sampler.list_dialogues(split="test"):
+            print(f"Dialogue {dialogue_name} does not exist.")
+            dialogue_name = None
+        if dialogue_name is None:
+            dialogue_name, goal, goal_description = self.goal_sampler.sample(split="test")
+        else:
+            dialogue_name, goal, goal_description = self.goal_sampler.select(split="test", dialogue_name=dialogue_name)
 
         self.sessions[session_id] = DialogueSession(
             session_id=session_id,

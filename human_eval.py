@@ -14,6 +14,7 @@ TOD_MODEL_KWARGS = {
     "t5-base": {
         "model_name_or_path": "tod_models/t5/output/t5-base-bs32-ep5-olen256/checkpoints",
         "device": "cuda:0",
+        "use_background_generation_server": True,
         "max_context_turns": 0,
         "max_input_length": 512,
         "max_output_length": 256,
@@ -29,6 +30,7 @@ TOD_MODEL_KWARGS = {
     "t5-large": {
         "model_name_or_path": "tod_models/t5/output/t5-large-bs32-ep5-olen256/checkpoints",
         "device": "cuda:0",
+        "use_background_generation_server": True,
         "max_context_turns": 0,
         "max_input_length": 512,
         "max_output_length": 256,
@@ -106,6 +108,16 @@ def run_server(args):
         indent=4, ensure_ascii=False
     )
     
+    # Load task IDs and session init params
+    if args.task_ids_fpath is not None:
+        task_ids = json.load(open(args.task_ids_fpath, "r"))
+        json.dump(
+            task_ids, open(os.path.join(args.output_dpath, "task_ids.json"), "w"),
+            indent=4, ensure_ascii=False
+        )
+    else:
+        task_ids = {}
+    
     # Load TOD models
     tod_models = {}
     for tod_model_name in args.tod_model_names:
@@ -121,43 +133,66 @@ def run_server(args):
     class MyHTTPRequestHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             paths = {
-            '/': {'status': 200},
-            '/dialogue': {'status': 200},
-            '/favicon.ico': {'status': 202},  # Need for chrome
+                '/': {'status': 200},
+                '/dialogue': {'status': 200},
+                '/favicon.ico': {'status': 202},  # Need for chrome
             }
-            if not urlparse(self.path).path in paths.keys():
+            parsed_path = urlparse(self.path)
+            if not parsed_path.path in paths.keys():
                 response = 500
                 self.send_response(response)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.end_headers()
                 content = ""
                 self.wfile.write(bytes(content, 'UTF-8'))
-            else:
-                parsed_path = urlparse(self.path)
-                response = paths[parsed_path.path]['status']
+                return
+            
+            response = paths[parsed_path.path]['status']
 
-                print('headers\r\n-----\r\n{}-----'.format(self.headers))
+            print('headers\r\n-----\r\n{}-----'.format(self.headers))
 
+            self.send_response(response)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+
+            if parsed_path.path == '/':
+                response = 500
                 self.send_response(response)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.end_headers()
-                if parsed_path.path == '/':
-                    response = 500
-                    self.send_response(response)
-                    self.send_header('Content-Type', 'text/html; charset=utf-8')
-                    self.end_headers()
-                    content = ""
-                    self.wfile.write(bytes(content, 'UTF-8'))
+                content = ""
+                self.wfile.write(bytes(content, 'UTF-8'))
+                return
 
-                elif parsed_path.path == '/dialogue':
-                    html_format_args = jmultiwoz_world.create_new_session()
-                    content = INTERFACE_HTML.format(
-                        instruction=html_format_args["instruction"],
-                        session_id=html_format_args["session_id"],
-                        question_list=html_format_args["question_list"],
-                        answer_list=html_format_args["answer_list"],
-                    )
-                    self.wfile.write(bytes(content, 'UTF-8'))
+            if parsed_path.path == '/dialogue':
+                sess_init_params = {}
+
+                if task_ids:
+                    query = parse_qs(parsed_path.query)
+                    try:
+                        sess_init_params = task_ids[query["task_id"][0]]
+                    except Exception as e:
+                        # content = (f"Error: {e}\n"
+                        #             f"Please specify a valid task_id in the URL query.")
+                        content = ( "<html><body>"
+                                   f"<h3>Error: {e}</h3>"
+                                   f"<p>Please specify a valid <b>task_id</b> in the URL query.</p>"
+                                    "</body></html>")
+                        response = 500
+                        self.send_response(response)
+                        self.send_header('Content-Type', 'text/html; charset=utf-8')
+                        self.end_headers()
+                        self.wfile.write(bytes(content, 'UTF-8'))
+                        return
+
+                html_format_args = jmultiwoz_world.create_new_session(**sess_init_params)
+                content = INTERFACE_HTML.format(
+                    instruction=html_format_args["instruction"],
+                    session_id=html_format_args["session_id"],
+                    question_list=html_format_args["question_list"],
+                    answer_list=html_format_args["answer_list"],
+                )
+                self.wfile.write(bytes(content, 'UTF-8'))
 
 
         def do_POST(self):
@@ -253,6 +288,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--tod_model_names", type=str, nargs="+", required=True,
                         help="List of TOD model names.")
+    parser.add_argument("--task_ids_fpath", type=str, default=None,
+                        help="Path to file listing task IDs and the session init params for each task.")
     parser.add_argument("--output_dpath", type=str,
                         default=f"human_eval_output/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}",
                         help="Path to directory to save results.")
