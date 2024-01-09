@@ -1,4 +1,4 @@
-# jmultiwoz-evaluation
+# Benchmarking Task-Oriented Dialogue Models on JMultiWOZ
 ## Requirements
 - Python 3.9+
 ```bash
