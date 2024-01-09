@@ -5,9 +5,21 @@ from copy import deepcopy
 import time
 import pickle
 import json
-from timeout_decorator import timeout, TimeoutError
+# from timeout_decorator import timeout, TimeoutError
 
-import openai
+from openai import (
+    OpenAI,
+    RateLimitError,
+    APITimeoutError
+)
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_random_exponential, # for exponential backoff
+    # retry_if_not_exception_type,
+    retry_if_exception_type,
+)
+import httpx
 
 from tod_models.tod_model_base import TODModelBase
 from tod_models.llm.prompts import PromptFormater
@@ -18,47 +30,32 @@ from utils.data_utils import (
     domain_state_str2dict,
 )
 
-openai.api_key = os.environ.get('OPENAI_API_KEY')
+openai_client = OpenAI(timeout=httpx.Timeout(timeout=60), max_retries=1)
+
+@retry(
+    retry=retry_if_exception_type(RateLimitError), # for rate limit
+    wait=wait_random_exponential(min=1, max=20),
+    stop=stop_after_attempt(3),
+    after=lambda x: print(f"Retrying: {x}"),
+)
+def chat_completion_with_retry(**kwargs):
+    return openai_client.chat.completions.create(**kwargs)
 
 def call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
-    while True:
-        try:
-            completion = openai.ChatCompletion.create(
-                model=model_name,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=max_tokens,
-                temperature=0,
-                # request_timeout=60, # this may don't work
-            )
-            return completion.choices[0].message["content"].strip()
-        
-        except openai.error.RateLimitError as e:
-            print(e)
-            print("Rate limit exceeded. Waiting for 10 seconds...")
-            time.sleep(10)
-            continue
-
-        except Exception as e:
-            print(e)
-            return ""
-
-
-def call_openai_api_with_timeout(model_name: str, prompt: str, max_tokens: int) -> str:
-    @timeout(60, use_signals=False)
-    def _call_openai_api(model_name: str, prompt: str, max_tokens: int) -> str:
-        return call_openai_api(model_name=model_name,
-                               prompt=prompt,
-                               max_tokens=max_tokens)
-    
     try:
-        return _call_openai_api(model_name=model_name,
-                                prompt=prompt,
-                                max_tokens=max_tokens)
-    except TimeoutError:
-        print(f"TimeoutError: {prompt}")
-        return "応答に時間がかかりすぎています。お手数ですが、もう一度お願いします。"
+        response = chat_completion_with_retry(
+            model=model_name,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=max_tokens,
+            temperature=0,
+            # request_timeout=60, # this may don't work
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error: {e}")
+        return f"Error: {e}"
 
 class OpenAITODModel(TODModelBase):
     def __init__(self, openai_model_name: str, max_context_turns: int, max_output_length: int, user_utterance_prefix: str, system_utterance_prefix: str,
@@ -101,9 +98,9 @@ class OpenAITODModel(TODModelBase):
         general_domain_prompt = self.prompt_formater.make_state_prompt(domain="general",
                                                                        context=context,
                                                                        fewshot_examples=fewshot_examples)
-        general_domain_state_str = call_openai_api_with_timeout(model_name=self.model_name,
-                                                                prompt=general_domain_prompt,
-                                                                max_tokens=self.max_tokens)
+        general_domain_state_str = call_openai_api(model_name=self.model_name,
+                                                   prompt=general_domain_prompt,
+                                                   max_tokens=self.max_tokens)
         general_damain_state, _ = domain_state_str2dict(domain="general", domain_state_str=general_domain_state_str)
 
         active_domain = general_damain_state["active_domain"]
@@ -114,9 +111,9 @@ class OpenAITODModel(TODModelBase):
         active_domain_prompt = self.prompt_formater.make_state_prompt(domain=active_domain,
                                                                       context=context,
                                                                       fewshot_examples=fewshot_examples)
-        active_domain_state_str = call_openai_api_with_timeout(model_name=self.model_name,
-                                                               prompt=active_domain_prompt,
-                                                               max_tokens=self.max_tokens)
+        active_domain_state_str = call_openai_api(model_name=self.model_name,
+                                                  prompt=active_domain_prompt,
+                                                  max_tokens=self.max_tokens)
         active_domain_state, active_book_state = domain_state_str2dict(domain=active_domain,
                                                                        domain_state_str=active_domain_state_str)
 
@@ -161,9 +158,9 @@ class OpenAITODModel(TODModelBase):
             book_result=book_result,
             fewshot_examples=fewshot_examples,
         )
-        response = call_openai_api_with_timeout(model_name=self.model_name,
-                                                prompt=active_domain_prompt,
-                                                max_tokens=self.max_tokens)
+        response = call_openai_api(model_name=self.model_name,
+                                   prompt=active_domain_prompt,
+                                   max_tokens=self.max_tokens)
         
         if return_prompt:
             return response, active_domain_prompt
