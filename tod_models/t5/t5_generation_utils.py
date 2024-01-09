@@ -1,3 +1,4 @@
+import os
 import json
 import traceback
 import threading
@@ -45,6 +46,7 @@ def create_t5_generation_function(
         return t5_generation_pipeline.generate
 
     # Option 2: Run T5 generation API server in background and return a caller function
+    os.environ["TOKENIZERS_PARALLELISM"] = "false" # Avoid tokenizer warning
     class T5GenerationAPIHandler(BaseHTTPRequestHandler):
         def do_POST(self):
             try:
@@ -86,7 +88,7 @@ def create_t5_generation_function(
     
     server_thread = threading.Thread(target=_run_server)
     server_thread.start()
-    print(f"Server started in background ({server_host}:{server_port})")
+    print(f"T5 generation server started in background ({server_host}:{server_port})")
 
     def call_t5_generation_server(**kwargs) -> str:
         response = requests.post(
