@@ -34,7 +34,7 @@ export OPENAI_API_KEY="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"
 #     --output_dir "output/gpt4-zs-olen256" \
 #     --task_name "e2e" \
 #     --resume_last_run \
-#     --world_size 1
+#     --world_size 4
 
 # OpenAI Few-Shot
 python inference.py \
