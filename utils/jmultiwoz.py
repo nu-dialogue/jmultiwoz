@@ -146,10 +146,6 @@ class JMultiWOZDatabase:
         return db_result
     
     def get_book_result(self, book_state, goal, oracle_book_result=None):
-        # We don't use the following slots for book since their true
-        # values change dynamically during dialogues.
-        taxi_slots_to_remove = ["departurepoint", "arrivalpoint"]
-
         book_result = {}
         for domain, constraints in book_state.items():
             book_result[domain] = {"success": None, "ref": None}
@@ -158,8 +154,11 @@ class JMultiWOZDatabase:
             true_constraints = deepcopy(goal.get(domain, {}).get("book", {}))
 
             if all(constraints.values()):
-                # Remove taxi slots
+                # Remove some slots from taxi book query
                 if domain == "taxi":
+                    # We don't use the following taxi slots since their true
+                    # values change dynamically during dialogues.
+                    taxi_slots_to_remove = ["departurepoint", "arrivalpoint"]
                     for slot_name in taxi_slots_to_remove:
                         del constraints[slot_name], true_constraints[slot_name]
 
