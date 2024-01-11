@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import random
 from typing import List, Tuple
+from copy import deepcopy
 
 class JMultiWOZDataset:
     def __init__(self, dataset_dpath) -> None:
@@ -145,19 +146,33 @@ class JMultiWOZDatabase:
         return db_result
     
     def get_book_result(self, book_state, goal, oracle_book_result=None):
+        # We don't use the following slots for book since their true
+        # values change dynamically during dialogues.
+        taxi_slots_to_remove = ["departurepoint", "arrivalpoint"]
+
         book_result = {}
         for domain, constraints in book_state.items():
-            true_constraints = goal.get(domain, {}).get("book", {})
-            if not all(constraints.values()): # Not yet
-                book_result[domain] = {"success": None, "ref": None}
-            elif constraints == true_constraints: # Success
-                if oracle_book_result and oracle_book_result.get(domain, {}).get("ref"):
-                    # Use oracle ref
-                    reference_number = oracle_book_result[domain]["ref"]
-                else:
-                    # Random ref
-                    reference_number = random.randrange(1, 10**5)
-                book_result[domain] = {"success": True, "ref": reference_number}
-            else: # Fail
-                book_result[domain] = {"success": False, "ref": None}
+            book_result[domain] = {"success": None, "ref": None}
+            
+            constraints = deepcopy(constraints)
+            true_constraints = deepcopy(goal.get(domain, {}).get("book", {}))
+
+            if all(constraints.values()):
+                # Remove taxi slots
+                if domain == "taxi":
+                    for slot_name in taxi_slots_to_remove:
+                        del constraints[slot_name], true_constraints[slot_name]
+
+                # Check success or not
+                if constraints == true_constraints: # Success
+                    book_result[domain]["success"] = True
+                    # Use oracle ref if exists
+                    if oracle_book_result and oracle_book_result.get(domain, {}).get("ref"):
+                        book_result[domain]["ref"] = oracle_book_result[domain]["ref"] # Use oracle ref
+                    else:
+                        book_result[domain]["ref"] = random.randrange(1, 10**5) # Random ref
+
+                else: # Fail
+                    book_result[domain]["success"] = False
+
         return book_result
