@@ -1,0 +1,138 @@
+{
+    "C4CHKiWJ": {
+        "dialogue_name": "dialogue_0198SUaV",
+        "tod_model_name": "gpt3.5-fs"
+    },
+    "5ehBDagR": {
+        "dialogue_name": "dialogue_4283jqWT",
+        "tod_model_name": "t5-large"
+    },
+    "JMDGgMIe": {
+        "dialogue_name": "dialogue_1348alif",
+        "tod_model_name": "t5-large"
+    },
+    "JRCfCETa": {
+        "dialogue_name": "dialogue_0731bqtB",
+        "tod_model_name": "gpt3.5-fs"
+    },
+    "6DOsU0Uu": {
+        "dialogue_name": "dialogue_1365UxMl",
+        "tod_model_name": "t5-large"
+    },
+    "9jHEmS2F": {
+        "dialogue_name": "dialogue_4606RQLg",
+        "tod_model_name": "t5-large"
+    },
+    "j5mBMD5A": {
+        "dialogue_name": "dialogue_3503Otst",
+        "tod_model_name": "gpt3.5-fs"
+    },
+    "QGj560mt": {
+        "dialogue_name": "dialogue_2047HgvK",
+        "tod_model_name": "t5-large"
+    },
+    "J8s4AOIN": {
+        "dialogue_name": "dialogue_0770RKMR",
+        "tod_model_name": "gpt3.5-fs"
+    },
+    "NM1WWwae": {
+        "dialogue_name": "dialogue_4283jqWT",
+        "tod_model_name": "gpt3.5-fs"
+    },
+    "HRsvOQMT": {
+        "dialogue_name": "dialogue_3156LwRi",
+        "tod_model_name": "t5-large"
+    },
+    "gwDrm5Hs": {
+        "dialogue_name": "dialogue_0299aVdX",
+        "tod_model_name": "gpt4-fs"
+    },
+    "KxpLpnt0": {
+        "dialogue_name": "dialogue_1079CqAo",
+        "tod_model_name": "gpt3.5-fs"
+    },
+    "N0ECI5Ot": {
+        "dialogue_name": "dialogue_3553Npsd",
+        "tod_model_name": "gpt4-fs"
+    },
+    "Z5AiV8nf": {
+        "dialogue_name": "dialogue_4842mkBi",
+        "tod_model_name": "t5-large"
+    },
+    "aDww9e1P": {
+        "dialogue_name": "dialogue_2188VDsd",
+        "tod_model_name": "gpt3.5-fs"
+    },
+    "BH1qo21i": {
+        "dialogue_name": "dialogue_4973IjLq",
+        "tod_model_name": "t5-large"
+    },
+    "X5pCpSUM": {
+        "dialogue_name": "dialogue_0872JANa",
+        "tod_model_name": "gpt3.5-fs"
+    },
+    "ctoKlQt7": {
+        "dialogue_name": "dialogue_3901UZMF",
+        "tod_model_name": "gpt4-fs"
+    },
+    "wjdVxviI": {
+        "dialogue_name": "dialogue_4790bHbX",
+        "tod_model_name": "gpt4-fs"
+    },
+    "zV1jdXGf": {
+        "dialogue_name": "dialogue_0988VyEo",
+        "tod_model_name": "gpt4-fs"
+    },
+    "OytNnGTZ": {
+        "dialogue_name": "dialogue_1085GaPn",
+        "tod_model_name": "gpt4-fs"
+    },
+    "SYj38hg6": {
+        "dialogue_name": "dialogue_1548wQkp",
+        "tod_model_name": "t5-base"
+    },
+    "a93iGuYP": {
+        "dialogue_name": "dialogue_0299aVdX",
+        "tod_model_name": "t5-base"
+    },
+    "tynijYkX": {
+        "dialogue_name": "dialogue_1333zLzr",
+        "tod_model_name": "t5-base"
+    },
+    "lQDeL9XN": {
+        "dialogue_name": "dialogue_4567cblJ",
+        "tod_model_name": "t5-base"
+    },
+    "rkMChUQ0": {
+        "dialogue_name": "dialogue_2047HgvK",
+        "tod_model_name": "t5-base"
+    },
+    "z6YcmuZX": {
+        "dialogue_name": "dialogue_0655KHOJ",
+        "tod_model_name": "t5-base"
+    },
+    "76SUTD41": {
+        "dialogue_name": "dialogue_1908vgKX",
+        "tod_model_name": "t5-base"
+    },
+    "6k8sHfpk": {
+        "dialogue_name": "dialogue_4283jqWT",
+        "tod_model_name": "t5-base"
+    },
+    "huJhSnQR": {
+        "dialogue_name": "dialogue_4283jqWT",
+        "tod_model_name": "t5-base"
+    },
+    "SuIOMUDL": {
+        "dialogue_name": "dialogue_1079CqAo",
+        "tod_model_name": "t5-base"
+    },
+    "45IeeHXr": {
+        "dialogue_name": "dialogue_3901UZMF",
+        "tod_model_name": "t5-base"
+    },
+    "b2Zrq45z": {
+        "dialogue_name": "dialogue_4208gsLx",
+        "tod_model_name": "t5-base"
+    }
+}
