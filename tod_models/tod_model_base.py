@@ -1,7 +1,7 @@
 from typing import List, Tuple, Optional
 
 class TODModelBase:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         raise NotImplementedError
     
     def set_memory(self, memory: Optional[dict]) -> None:
@@ -27,6 +27,7 @@ class TODModelBase:
             context: List of (speaker, utterance) pairs.
         Returns:
             belief_state: Belief state.
+            book_state: Book state.
         """
         raise NotImplementedError
     
@@ -37,6 +38,7 @@ class TODModelBase:
         Args:
             context: List of (speaker, utterance) pairs.
             belief_state: Belief state.
+            book_state: Book state.
             db_result: DB result.
             book_result: Book result.
         Returns:

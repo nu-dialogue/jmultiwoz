@@ -172,8 +172,6 @@ def run_server(args):
                     try:
                         sess_init_params = task_ids[query["task_id"][0]]
                     except Exception as e:
-                        # content = (f"Error: {e}\n"
-                        #             f"Please specify a valid task_id in the URL query.")
                         content = ( "<html><body>"
                                    f"<h3>Error: {e}</h3>"
                                    f"<p>Please specify a valid <b>task_id</b> in the URL query.</p>"
