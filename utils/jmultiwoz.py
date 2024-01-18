@@ -160,7 +160,10 @@ class JMultiWOZDatabase:
                     # values change dynamically during dialogues.
                     taxi_slots_to_remove = ["departurepoint", "arrivalpoint"]
                     for slot_name in taxi_slots_to_remove:
-                        del constraints[slot_name], true_constraints[slot_name]
+                        try:
+                            del constraints[slot_name], true_constraints[slot_name]
+                        except KeyError:
+                            pass
 
                 # Check success or not
                 if constraints == true_constraints: # Success
