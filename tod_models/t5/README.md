@@ -1,4 +1,12 @@
 # T5-based Task-oriented Dialogue Modeling
+
+You can directly use our fine-tuned model:
+| Backbone Model | Link |
+| :--- | :--- |
+|T5-base | [nu-dialogue/t5-base-jmultiwoz-e2e](https://huggingface.co/nu-dialogue/t5-base-jmultiwoz-e2e) |
+|T5-large | [nu-dialogue/t5-large-jmultiwoz-e2e](https://huggingface.co/nu-dialogue/t5-large-jmultiwoz-e2e) |
+
+If you want to fine-tune the model by yourself, please follow the instructions below:
 ## Prepare Dataset
 
 ```bash

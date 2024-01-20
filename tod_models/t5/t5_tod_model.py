@@ -42,21 +42,6 @@ class T5TODModel(TODModelBase):
     def get_memory(self) -> None:
         return None
 
-    def _generate(self, input_text: str, **kwargs) -> str:
-        default_trunction_side = self.tokenizer.truncation_side
-        self.tokenizer.truncation_side = "left"
-        model_inputs = self.tokenizer([input_text], max_length=self.max_input_length, truncation=True, return_tensors="pt")
-        self.tokenizer.truncation_side = default_trunction_side
-
-        outputs = self.t5_model.generate(
-            input_ids=model_inputs.input_ids.to(self.device),
-            attention_mask=model_inputs.attention_mask.to(self.device),
-            max_length=self.max_output_length,
-            **kwargs
-        )
-        output_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        return output_text
-    
     def predict_state(self, context: List[Tuple[str, str]]) -> Tuple[dict, dict]:
         context_str = context_list2str(
             context=context,

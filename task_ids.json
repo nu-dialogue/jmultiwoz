@@ -1,13 +1,13 @@
 {
-    "example_task_A": {
+    "task_A": {
         "dialogue_name": "dialogue_0198SUaV",
         "tod_model_name": "gpt3.5-fs"
     },
-    "example_task_B": {
+    "task_B": {
         "dialogue_name": "dialogue_4283jqWT",
         "tod_model_name": "t5-large"
     },
-    "example_task_C": {
+    "task_C": {
         "dialogue_name": "dialogue_1348alif",
         "tod_model_name": "gpt4-fs"
     }

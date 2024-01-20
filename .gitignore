@@ -161,6 +161,7 @@ cython_debug/
 
 dataset/*
 !dataset/JMultiWOZ_1.0.zip
+!dataset/README.md
 processed_data
 output
 t5/output

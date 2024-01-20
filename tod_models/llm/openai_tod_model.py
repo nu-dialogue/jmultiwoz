@@ -1,16 +1,12 @@
 import os
-import time
 from typing import List, Tuple, Union, Optional
 from copy import deepcopy
-import time
 import pickle
 import json
-# from timeout_decorator import timeout, TimeoutError
 
 from openai import (
     OpenAI,
     RateLimitError,
-    APITimeoutError
 )
 from tenacity import (
     retry,

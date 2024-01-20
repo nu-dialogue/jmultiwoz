@@ -12,7 +12,7 @@ from utils.human_eval_worlds import JMultiWOZWorld
 
 TOD_MODEL_KWARGS = {
     "t5-base": {
-        "model_name_or_path": "tod_models/t5/output/t5-base-bs32-ep5-olen256/checkpoints",
+        "model_name_or_path": "nu-dialogue/t5-base-jmultiwoz-e2e",
         "device": "cuda:0",
         "use_background_generation_server": True,
         "max_context_turns": 0,
