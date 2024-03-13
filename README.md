@@ -1,10 +1,13 @@
 # JMultiWOZ: Japanese Multi-Domain Wizard-of-Oz Dataset
-[![License](https://img.shields.io/badge/License-CC_BY--ND_4.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/License-CC_BY--SA_4.0-blue)](LICENSE)
 [![Hugging Face Datasets Hub](https://img.shields.io/badge/Hugging%20Face_🤗-Datasets-ffcc66)](https://huggingface.co/datasets/nu-dialogue/jmultiwoz)
 
 This repo contins JMultiWOZ, a Japanese Multi-Domain Wizard-of-Oz Dataset, and code for benchmarking task-oriented dialogue models on the dataset. More details about the dataset can be found in our LREC-COLING 2024 paper:
 
-**MultiWOZ: A Large-Scale Japanese Multi-Domain Task-Oriented Dialogue Dataset** [[Paper]()]
+**MultiWOZ: A Large-Scale Japanese Multi-Domain Task-Oriented Dialogue Dataset** [[To appear]()]
+
+## Updates
+- [Mar 13, 2024] The license has been updated.
 
 ## Requirements
 - Python 3.9+
@@ -142,10 +145,10 @@ This work was supported by JST Moonshot R&D Grant number JPMJMS2011.
 <img src="assets/moonshot_logo.svg" width="200">
 
 ## License
-The JMultiWOZ dataset is licensed under a [Creative Commons Attribution-NoDerivatives 4.0 International License][cc-by-nd].
+The JMultiWOZ dataset is licensed under a [Creative Commons Attribution-ShareAlike 4.0 International License][cc-by-sa]. Models trained using the dataset are not considered copies or direct derivatives of the dataset itself, and thus are not required to comply with the terms of this license.
 
-[![CC BY-ND 4.0][cc-by-nd-image]][cc-by-nd]
+[![CC BY-SA 4.0][cc-by-sa-image]][cc-by-sa]
 
-[cc-by-nd]: http://creativecommons.org/licenses/by-nd/4.0/
-[cc-by-nd-image]: https://licensebuttons.net/l/by-nd/4.0/88x31.png
-[cc-by-nd-shield]: https://img.shields.io/badge/License-CC%20BY--ND%204.0-lightgrey.svg
+[cc-by-sa]: http://creativecommons.org/licenses/by-sa/4.0/
+[cc-by-sa-image]: https://licensebuttons.net/l/by-sa/4.0/88x31.png
+[cc-by-sa-shield]: https://img.shields.io/badge/License-CC%20BY--sa%204.0-lightgrey.svg
