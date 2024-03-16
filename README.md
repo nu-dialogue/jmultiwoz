@@ -4,7 +4,7 @@
 
 This repo contins JMultiWOZ, a Japanese Multi-Domain Wizard-of-Oz Dataset, and code for benchmarking task-oriented dialogue models on the dataset. More details about the dataset can be found in our LREC-COLING 2024 paper:
 
-**MultiWOZ: A Large-Scale Japanese Multi-Domain Task-Oriented Dialogue Dataset** [[To appear]()]
+**JMultiWOZ: A Large-Scale Japanese Multi-Domain Task-Oriented Dialogue Dataset** [[To appear]()]
 
 ## Updates
 - [Mar 13, 2024] The license has been updated.
