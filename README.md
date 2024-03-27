@@ -2,12 +2,9 @@
 [![License](https://img.shields.io/badge/License-CC_BY--SA_4.0-blue)](LICENSE)
 [![Hugging Face Datasets Hub](https://img.shields.io/badge/Hugging%20Face_🤗-Datasets-ffcc66)](https://huggingface.co/datasets/nu-dialogue/jmultiwoz)
 
-This repo contins JMultiWOZ, a Japanese Multi-Domain Wizard-of-Oz Dataset, and code for benchmarking task-oriented dialogue models on the dataset. More details about the dataset can be found in our LREC-COLING 2024 paper:
+This repo contains JMultiWOZ, a Japanese Multi-Domain Wizard-of-Oz Dataset, and code for benchmarking task-oriented dialogue models on the dataset. More details about the dataset can be found in our LREC-COLING 2024 paper:
 
-**JMultiWOZ: A Large-Scale Japanese Multi-Domain Task-Oriented Dialogue Dataset** [[To appear]()]
-
-## Updates
-- [Mar 13, 2024] The license has been updated.
+**JMultiWOZ: A Large-Scale Japanese Multi-Domain Task-Oriented Dialogue Dataset** [[Paper](https://arxiv.org/abs/2403.17319)]
 
 ## Requirements
 - Python 3.9+
@@ -70,7 +67,7 @@ python evaluate.py \
 ```
 Resulted scores will be saved in `output/gpt4-fs-olen256/e2e.scores_summary.json`.
 
-### End-to-End generation results reported in our LREC-COLING 2024 paper
+### End-to-End generation results reported in our paper
 | Model             | JGA   | Slot F1   | BLEU  |
 | :---              | :---: | :---:     | :---: |
 | T5-base           | 0.59  | 0.95      | 39.7  |
@@ -101,7 +98,7 @@ To interact with specific models and user goals setting, you can use `--task_ids
 
 If you use `--task_ids_fpath` option, you can specify the task ID by adding `?task_id=<task_id>` to the URL (e.g., http://localhost:8080/dialogue?task_id=task_B).
 
-### Results reported in our LREC-COLING 2024 paper
+### Results reported in our paper
 | Model             | # Participants    | Success   | Turn  | Satisfaction  |
 | :---              | :---:             | :---:     | :---: | :---:         |
 | T5-base           | 38                | 55.26     | 11.21 | 3.05          |
